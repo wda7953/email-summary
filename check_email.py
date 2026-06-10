@@ -46,6 +46,20 @@ def get_text_from_payload(payload):
             return text
     return ""
 
+def shorten_sender(sender):
+    """只保留名稱或信箱前半段，去掉角括號"""
+    # "王小明 <abc@gmail.com>" → "王小明"
+    # "<abc@gmail.com>" → "abc@gmail.com"
+    m = re.match(r'^"?([^"<]+)"?\s*<', sender)
+    if m:
+        name = m.group(1).strip()
+        if name:
+            return name
+    m2 = re.search(r'<([^>]+)>', sender)
+    if m2:
+        return m2.group(1)
+    return sender.strip()
+
 def fetch_recent_emails(service, hours=7):
     """取得最近 hours 小時內的郵件"""
     since = int((datetime.now(timezone.utc) - timedelta(hours=hours)).timestamp())
@@ -71,15 +85,10 @@ def fetch_recent_emails(service, hours=7):
         # 判斷來源：有 Outlook 標籤的是從 Outlook 轉寄來的
         source = "Outlook" if any("Outlook" in l for l in labels) else "Gmail"
 
-        body = get_text_from_payload(detail["payload"])
-        # 只取前 200 字
-        snippet = re.sub(r'\s+', ' ', body).strip()[:200]
-
         emails.append({
             "source": source,
-            "sender": sender,
+            "sender": shorten_sender(sender),
             "subject": subject,
-            "snippet": snippet,
         })
 
     return emails
@@ -111,28 +120,29 @@ def main():
     emails = fetch_recent_emails(service, hours=hours)
 
     if not emails:
-        send_line_message(f"📭 {now_tw.strftime('%m/%d %H:%M')} 郵件摘要\n\n沒有新郵件。")
+        send_line_message(f"📭 {now_tw.strftime('%m/%d %H:%M')} 郵件摘要\n沒有新郵件。")
         return
 
     # 分組
     gmail_mails   = [e for e in emails if e["source"] == "Gmail"]
     outlook_mails = [e for e in emails if e["source"] == "Outlook"]
 
-    lines = [f"📬 {now_tw.strftime('%m/%d %H:%M')} 郵件摘要（共 {len(emails)} 封）\n"]
+    lines = [f"📬 {now_tw.strftime('%m/%d %H:%M')}｜共 {len(emails)} 封\n"]
+
+    def format_group(title, mails):
+        result = [f"【{title}】{len(mails)} 封"]
+        for i, e in enumerate(mails, 1):
+            result.append(f"{i}. {e['subject']}")
+            result.append(f"   寄：{e['sender']}")
+        return result
 
     if gmail_mails:
-        lines.append(f"── Gmail（{len(gmail_mails)} 封）──")
-        for e in gmail_mails:
-            lines.append(f"• {e['subject']}\n  寄件者：{e['sender']}")
-            if e["snippet"]:
-                lines.append(f"  {e['snippet'][:100]}...")
+        lines += format_group("Gmail", gmail_mails)
 
     if outlook_mails:
-        lines.append(f"\n── Outlook（{len(outlook_mails)} 封）──")
-        for e in outlook_mails:
-            lines.append(f"• {e['subject']}\n  寄件者：{e['sender']}")
-            if e["snippet"]:
-                lines.append(f"  {e['snippet'][:100]}...")
+        if gmail_mails:
+            lines.append("")
+        lines += format_group("Outlook", outlook_mails)
 
     send_line_message("\n".join(lines))
     print(f"已傳送 {len(emails)} 封郵件摘要至 LINE")
