@@ -1,0 +1,32 @@
+name: Email Summary to LINE
+
+on:
+  schedule:
+    # 09:00 台灣時間 = 01:00 UTC
+    - cron: '0 1 * * *'
+    # 16:00 台灣時間 = 08:00 UTC
+    - cron: '0 8 * * *'
+  workflow_dispatch:  # 允許手動觸發測試
+
+jobs:
+  send-summary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install google-auth google-api-python-client requests
+
+      - name: Run email summary
+        env:
+          GMAIL_CLIENT_ID:            ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET:        ${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN:        ${{ secrets.GMAIL_REFRESH_TOKEN }}
+          LINE_CHANNEL_ACCESS_TOKEN:  ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID:               ${{ secrets.LINE_USER_ID }}
+        run: python check_email.py
