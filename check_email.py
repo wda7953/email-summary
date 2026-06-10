@@ -86,7 +86,7 @@ def fetch_recent_emails(service, hours=7):
         source = "Outlook" if any("Outlook" in l for l in labels) else "Gmail"
 
         body = get_text_from_payload(detail["payload"])
-        snippet = re.sub(r'\s+', ' ', body).strip()[:80]
+        snippet = re.sub(r'\s+', ' ', body).strip()[:40]
 
         emails.append({
             "source": source,
@@ -136,9 +136,9 @@ def main():
     def format_group(title, mails):
         result = [f"【{title}】{len(mails)} 封"]
         for i, e in enumerate(mails, 1):
-            block = f"{i}. {e['sender']}\n{e['subject']}"
+            block = f"{i}. {e['sender']}\n・{e['subject']}"
             if e.get("snippet"):
-                block += f"\n{e['snippet']}"
+                block += f"\n[{e['snippet']}]"
             result.append(block)
         return result
 
