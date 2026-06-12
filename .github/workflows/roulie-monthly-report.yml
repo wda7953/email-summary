@@ -1,0 +1,25 @@
+name: 柔力月收入報告
+
+on:
+  schedule:
+    - cron: '0 14 1 * *'   # 每月 1 日 22:00 台灣時間
+  workflow_dispatch:
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安裝套件
+        run: pip install caldav pytz google-api-python-client google-auth requests
+
+      - name: 執行月報腳本
+        env:
+          ICLOUD_PASSWORD:          ${{ secrets.ICLOUD_PASSWORD }}
+          GCAL_REFRESH_TOKEN:       ${{ secrets.GCAL_REFRESH_TOKEN }}
+          GOOGLE_CLIENT_ID:         ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:     ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID:             ${{ secrets.LINE_USER_ID }}
+        run: python roulie_monthly_report.py
