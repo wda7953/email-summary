@@ -113,44 +113,38 @@ def send_line_message(text):
     )
 
 # ── 主程式 ────────────────────────────────────────────────
+def format_section(title, mails, timestamp):
+    """格式化單一來源的郵件區塊"""
+    blocks = [f"【{title}】 {timestamp}｜共 {len(mails)} 封"]
+    for i, e in enumerate(mails, 1):
+        block = f"\n({i})     {e['sender']}\n<{e['subject']}>"
+        if e.get("snippet"):
+            block += f"\n|{e['snippet'][:30]}|"
+        blocks.append(block)
+    return "\n".join(blocks)
+
+
 def main():
     service = get_gmail_service()
     now_tw = datetime.now(timezone(timedelta(hours=8)))
-    hour = now_tw.hour
-    # 09:00 → 讀取過去 17 小時（涵蓋昨天 16:00 以後）
-    # 16:00 → 讀取過去 7 小時（涵蓋今天 09:00 以後）
-    hours = 17 if hour < 12 else 7
+    emails = fetch_recent_emails(service, hours=24)
 
-    emails = fetch_recent_emails(service, hours=hours)
+    timestamp = now_tw.strftime('%m/%d %H:%M')
 
     if not emails:
-        send_line_message(f"📭 {now_tw.strftime('%m/%d %H:%M')} 郵件摘要\n沒有新郵件。")
+        send_line_message(f"📭 {timestamp} 郵件摘要\n沒有新郵件。")
         return
 
-    # 分組
     gmail_mails   = [e for e in emails if e["source"] == "Gmail"]
     outlook_mails = [e for e in emails if e["source"] == "Outlook"]
 
-    lines = [f"📬 {now_tw.strftime('%m/%d %H:%M')}｜共 {len(emails)} 封\n"]
-
-    def format_group(title, mails):
-        result = [f"【{title}】{len(mails)} 封"]
-        for i, e in enumerate(mails, 1):
-            block = f"{i}. {e['sender']}\n・{e['subject']}"
-            if e.get("snippet"):
-                block += f"\n[{e['snippet']}]"
-            result.append(block)
-        return result
-
+    sections = []
     if gmail_mails:
-        lines += format_group("Gmail", gmail_mails)
-
+        sections.append(format_section("Gmail", gmail_mails, timestamp))
     if outlook_mails:
-        if gmail_mails:
-            lines.append("")
-        lines += format_group("Outlook", outlook_mails)
+        sections.append(format_section("Outlook", outlook_mails, timestamp))
 
-    send_line_message("\n".join(lines))
+    send_line_message("\n\n".join(sections))
     print(f"已傳送 {len(emails)} 封郵件摘要至 LINE")
 
 if __name__ == "__main__":
