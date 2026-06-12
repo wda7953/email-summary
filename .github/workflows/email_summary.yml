@@ -1,12 +1,7 @@
 name: Email Summary to LINE
 
 on:
-  schedule:
-    # 09:00 台灣時間 = 01:00 UTC
-    - cron: '0 1 * * *'
-    # 16:00 台灣時間 = 08:00 UTC
-    - cron: '0 8 * * *'
-  workflow_dispatch:  # 允許手動觸發測試
+  workflow_dispatch:  # 由 cron-job.org 觸發
 
 jobs:
   send-summary:
