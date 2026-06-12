@@ -9,6 +9,8 @@ jobs:
   send-salary:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: 安裝套件
         run: pip install google-auth google-api-python-client openpyxl requests
 
