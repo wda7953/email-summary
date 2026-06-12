@@ -1,0 +1,25 @@
+name: 孟潔薪資通知
+
+on:
+  schedule:
+    - cron: '0 1 2 * *'   # 每月 2 日 09:00 台灣時間
+  workflow_dispatch:
+
+jobs:
+  send-salary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安裝套件
+        run: pip install google-api-python-client google-auth requests
+
+      - name: 執行薪資腳本
+        env:
+          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+          GOOGLE_CLIENT_ID:     ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          MENGJE_SHEET_ID:      ${{ secrets.MENGJE_SHEET_ID }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID:         ${{ secrets.LINE_USER_ID }}
+        run: python mengje_salary_notify.py
