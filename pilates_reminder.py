@@ -1,20 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""每天查 iCloud 行事曆空檔，推薦皮拉提斯自主練習時間，發 LINE 提醒"""
+"""每天查 iCloud + Google Calendar 空檔，推薦皮拉提斯自主練習時間，發 LINE 提醒"""
 
 import os
 import sys
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timezone
 
 import caldav
 import pytz
 import requests
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+from googleapiclient.discovery import build
 
 TZ = pytz.timezone("Asia/Taipei")
 ICLOUD_USER = "wda7953@hotmail.com"
 ICLOUD_PASS = os.environ["ICLOUD_PASSWORD"]
 LINE_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 LINE_USER = os.environ["LINE_USER_ID"]
+
+# 柔力場館 Google Calendar（含 olan 教課時段）
+GCAL_ID = "1b49f93678583508e8185ed6fe71f414c19f09ff801eac2a7bbe08e28b22dd76@group.calendar.google.com"
 
 MIN_GAP = 30   # 最短空檔分鐘數
 DAY_START = 8  # 搜尋起點（小時）
@@ -36,45 +42,80 @@ def send_line(msg: str) -> None:
     print(f"已發送：{msg[:30]}…")
 
 
-def get_today_events() -> list[tuple[datetime, datetime]]:
-    """取得今天所有 iCloud 行事曆的有時間的事件"""
-    client = caldav.DAVClient(
-        url="https://caldav.icloud.com",
-        username=ICLOUD_USER,
-        password=ICLOUD_PASS,
+def _gcal_creds() -> Credentials:
+    creds = Credentials(
+        token=None,
+        refresh_token=os.environ["GCAL_REFRESH_TOKEN"],
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=os.environ["GOOGLE_CLIENT_ID"],
+        client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     )
+    creds.refresh(Request())
+    return creds
+
+
+def _to_tw(dt_str: str) -> datetime:
+    """RFC3339 字串轉台灣時間 datetime"""
+    dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+    return dt.astimezone(TZ)
+
+
+def get_today_events() -> list[tuple[datetime, datetime]]:
+    """取得今天 iCloud（全部行事曆）+ Google Calendar（柔力場館）的有時間事件"""
     today = date.today()
     window_start = TZ.localize(datetime(today.year, today.month, today.day, DAY_START, 0))
     window_end = TZ.localize(datetime(today.year, today.month, today.day, DAY_END, 0))
-
     events = []
-    for cal in client.principal().calendars():
-        try:
-            for ev in cal.date_search(start=window_start, end=window_end):
-                try:
-                    comp = ev.icalendar_component
-                    dt_s = comp.get("DTSTART").dt
-                    dt_e = comp.get("DTEND").dt
 
-                    # 全天事件（date 型別）跳過
-                    if isinstance(dt_s, date) and not isinstance(dt_s, datetime):
-                        continue
+    # ── iCloud（武士課 / 個人行程）──
+    try:
+        client = caldav.DAVClient(
+            url="https://caldav.icloud.com",
+            username=ICLOUD_USER,
+            password=ICLOUD_PASS,
+        )
+        for cal in client.principal().calendars():
+            try:
+                for ev in cal.date_search(start=window_start, end=window_end):
+                    try:
+                        comp = ev.icalendar_component
+                        dt_s = comp.get("DTSTART").dt
+                        dt_e = comp.get("DTEND").dt
+                        if isinstance(dt_s, date) and not isinstance(dt_s, datetime):
+                            continue  # 全天事件跳過
+                        if dt_s.tzinfo is None:
+                            dt_s = TZ.localize(dt_s)
+                        else:
+                            dt_s = dt_s.astimezone(TZ)
+                        if dt_e.tzinfo is None:
+                            dt_e = TZ.localize(dt_e)
+                        else:
+                            dt_e = dt_e.astimezone(TZ)
+                        events.append((dt_s, dt_e))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"iCloud 讀取失敗：{e}", file=sys.stderr)
 
-                    # 統一轉台灣時區
-                    if dt_s.tzinfo is None:
-                        dt_s = TZ.localize(dt_s)
-                    else:
-                        dt_s = dt_s.astimezone(TZ)
-                    if dt_e.tzinfo is None:
-                        dt_e = TZ.localize(dt_e)
-                    else:
-                        dt_e = dt_e.astimezone(TZ)
-
-                    events.append((dt_s, dt_e))
-                except Exception:
-                    pass
-        except Exception:
-            pass
+    # ── Google Calendar（柔力場館，含 olan 教課時段）──
+    try:
+        service = build("calendar", "v3", credentials=_gcal_creds(), cache_discovery=False)
+        result = service.events().list(
+            calendarId=GCAL_ID,
+            timeMin=window_start.isoformat(),
+            timeMax=window_end.isoformat(),
+            singleEvents=True,
+        ).execute()
+        for item in result.get("items", []):
+            start = item.get("start", {})
+            end = item.get("end", {})
+            if "dateTime" not in start:
+                continue  # 全天事件跳過
+            events.append((_to_tw(start["dateTime"]), _to_tw(end["dateTime"])))
+    except Exception as e:
+        print(f"Google Calendar 讀取失敗：{e}", file=sys.stderr)
 
     return sorted(events)
 
