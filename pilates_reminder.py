@@ -22,15 +22,9 @@ LINE_USER = os.environ["LINE_USER_ID"]
 # 柔力場館 Google Calendar（含 olan 教課時段）
 GCAL_ID = "1b49f93678583508e8185ed6fe71f414c19f09ff801eac2a7bbe08e28b22dd76@group.calendar.google.com"
 
-MIN_GAP = 30   # 最短空檔分鐘數
+MIN_GAP = 45   # 最短空檔分鐘數（太短連吃飯都不夠，不建議練習）
 DAY_START = 8  # 搜尋起點（小時）
 DAY_END = 22   # 搜尋終點（小時）
-
-# 固定排除的休息時段（不建議練習）
-BLOCKED_SLOTS = [
-    (12, 0, 13, 0),   # 午餐
-    (18, 0, 19, 30),  # 晚餐
-]
 
 MODE = os.environ.get("REMINDER_MODE", "morning")
 
@@ -123,11 +117,6 @@ def get_today_events() -> list[tuple[datetime, datetime]]:
     except Exception as e:
         print(f"Google Calendar 讀取失敗：{e}", file=sys.stderr)
 
-    # 加入固定休息時段
-    for h1, m1, h2, m2 in BLOCKED_SLOTS:
-        s = TZ.localize(datetime(today.year, today.month, today.day, h1, m1))
-        e = TZ.localize(datetime(today.year, today.month, today.day, h2, m2))
-        events.append((s, e))
 
     return sorted(events)
 
