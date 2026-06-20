@@ -26,6 +26,12 @@ MIN_GAP = 30   # 最短空檔分鐘數
 DAY_START = 8  # 搜尋起點（小時）
 DAY_END = 22   # 搜尋終點（小時）
 
+# 固定排除的休息時段（不建議練習）
+BLOCKED_SLOTS = [
+    (12, 0, 13, 0),   # 午餐
+    (18, 0, 19, 30),  # 晚餐
+]
+
 MODE = os.environ.get("REMINDER_MODE", "morning")
 
 
@@ -108,23 +114,20 @@ def get_today_events() -> list[tuple[datetime, datetime]]:
             timeMax=window_end.isoformat(),
             singleEvents=True,
         ).execute()
-        items = result.get("items", [])
-        print(f"[DEBUG] Google Calendar 讀到 {len(items)} 個事件")
-        for item in items:
+        for item in result.get("items", []):
             start = item.get("start", {})
             end = item.get("end", {})
-            summary = item.get("summary", "(無標題)")
-            print(f"[DEBUG] GCal 事件：{summary} / start={start} / end={end}")
             if "dateTime" not in start:
-                print(f"[DEBUG] 跳過全天事件：{summary}")
                 continue
             events.append((_to_tw(start["dateTime"]), _to_tw(end["dateTime"])))
     except Exception as e:
         print(f"Google Calendar 讀取失敗：{e}", file=sys.stderr)
 
-    print(f"[DEBUG] iCloud+GCal 合計 {len(events)} 個有時間事件")
-    for s, e in sorted(events):
-        print(f"[DEBUG] 事件：{s.strftime('%H:%M')}–{e.strftime('%H:%M')}")
+    # 加入固定休息時段
+    for h1, m1, h2, m2 in BLOCKED_SLOTS:
+        s = TZ.localize(datetime(today.year, today.month, today.day, h1, m1))
+        e = TZ.localize(datetime(today.year, today.month, today.day, h2, m2))
+        events.append((s, e))
 
     return sorted(events)
 
