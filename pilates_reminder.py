@@ -108,14 +108,23 @@ def get_today_events() -> list[tuple[datetime, datetime]]:
             timeMax=window_end.isoformat(),
             singleEvents=True,
         ).execute()
-        for item in result.get("items", []):
+        items = result.get("items", [])
+        print(f"[DEBUG] Google Calendar 讀到 {len(items)} 個事件")
+        for item in items:
             start = item.get("start", {})
             end = item.get("end", {})
+            summary = item.get("summary", "(無標題)")
+            print(f"[DEBUG] GCal 事件：{summary} / start={start} / end={end}")
             if "dateTime" not in start:
-                continue  # 全天事件跳過
+                print(f"[DEBUG] 跳過全天事件：{summary}")
+                continue
             events.append((_to_tw(start["dateTime"]), _to_tw(end["dateTime"])))
     except Exception as e:
         print(f"Google Calendar 讀取失敗：{e}", file=sys.stderr)
+
+    print(f"[DEBUG] iCloud+GCal 合計 {len(events)} 個有時間事件")
+    for s, e in sorted(events):
+        print(f"[DEBUG] 事件：{s.strftime('%H:%M')}–{e.strftime('%H:%M')}")
 
     return sorted(events)
 
