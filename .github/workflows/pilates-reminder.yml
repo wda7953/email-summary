@@ -1,0 +1,46 @@
+name: 皮拉提斯自主練習提醒
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # 每天 08:00 台灣時間（UTC+8）
+    - cron: '0 14 * * *'  # 每天 22:00 台灣時間（UTC+8）
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'morning 或 evening'
+        required: false
+        default: 'morning'
+
+jobs:
+  morning-remind:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '0 0 * * *'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安裝套件
+        run: pip install caldav pytz requests icalendar
+
+      - name: 查空檔並發早晨提醒
+        env:
+          ICLOUD_PASSWORD:           ${{ secrets.ICLOUD_PASSWORD }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID:              ${{ secrets.LINE_USER_ID }}
+          REMINDER_MODE:             morning
+        run: python pilates_reminder.py
+
+  evening-remind:
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 14 * * *'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安裝套件
+        run: pip install requests
+
+      - name: 發晚間追蹤提醒
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID:              ${{ secrets.LINE_USER_ID }}
+          REMINDER_MODE:             evening
+        run: python pilates_reminder.py
