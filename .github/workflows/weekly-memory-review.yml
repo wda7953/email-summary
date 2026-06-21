@@ -1,0 +1,17 @@
+name: 週日記憶整理提醒
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # 每週日 08:00 台灣時間（UTC+8）
+  workflow_dispatch:
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 傳送 LINE 提醒
+        run: |
+          curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Authorization: Bearer ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"to": "${{ secrets.LINE_USER_ID }}", "messages": [{"type": "text", "text": "【週回顧提醒】花 30 分鐘整理 MEMORY.md：\n1. 刪掉過期或錯誤的記錄\n2. 把重要偏好升級到 CORE_RULES.md\n3. cd 到 000_Agent/ 執行 git push 備份到 GitHub"}]}'
