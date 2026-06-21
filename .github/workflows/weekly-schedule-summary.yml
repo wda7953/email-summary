@@ -1,0 +1,23 @@
+name: 週日排程總覽
+
+on:
+  schedule:
+    - cron: '0 1 * * 0'  # 每週日 09:00 台灣時間（UTC+8）
+  workflow_dispatch:
+
+jobs:
+  send-summary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 傳送 LINE 排程總覽
+        run: |
+          curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Authorization: Bearer ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "to": "${{ secrets.LINE_USER_ID }}",
+              "messages": [{
+                "type": "text",
+                "text": "📋 本週自動排程總覽\n\n【每天】\n・08:00 皮拉提斯自主練習提醒\n・10:00 Gmail 摘要\n・22:00 皮拉提斯晚間追蹤\n\n【每週日】\n・09:00 排程總覽（本則）\n・14:00 記憶整理提醒\n\n【每月】\n・月底 22:00 武士月業績報告\n・1日 22:00 收入月報\n・2日 09:00 Joyce／孟潔薪資通知"
+              }]
+            }'
