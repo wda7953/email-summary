@@ -2,11 +2,26 @@ name: 武士月業績報告
 
 on:
   schedule:
-    - cron: "0 14 30 6 *"  # 6/30 22:00 台灣時間 (UTC+8)
-  workflow_dispatch:         # 可手動觸發
+    - cron: "0 14 28-31 * *"  # 每月 28-31 日 22:00 台灣時間，腳本內確認是否月底
+  workflow_dispatch:           # 可手動觸發
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.date.outputs.run }}
+    steps:
+      - id: date
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$(date -d tomorrow +%d)" = "01" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
   send-report:
+    needs: check
+    if: needs.check.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: 安裝 Python 套件
