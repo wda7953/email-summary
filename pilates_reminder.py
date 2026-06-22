@@ -4,29 +4,23 @@
 
 import os
 import sys
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
-import caldav
 import pytz
 import requests
-from google.oauth2.credentials import Credentials
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
 
 TZ = pytz.timezone("Asia/Taipei")
-ICLOUD_USER = "wda7953@hotmail.com"
-ICLOUD_PASS = os.environ["ICLOUD_PASSWORD"]
 LINE_TOKEN = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 LINE_USER = os.environ["LINE_USER_ID"]
+MODE = os.environ.get("REMINDER_MODE", "morning")
 
 # 柔力場館 Google Calendar（含 olan 教課時段）
 GCAL_ID = "1b49f93678583508e8185ed6fe71f414c19f09ff801eac2a7bbe08e28b22dd76@group.calendar.google.com"
+ICLOUD_USER = "wda7953@hotmail.com"
 
-MIN_GAP = 45   # 最短空檔分鐘數（太短連吃飯都不夠，不建議練習）
-DAY_START = 8  # 搜尋起點（小時）
-DAY_END = 22   # 搜尋終點（小時）
-
-MODE = os.environ.get("REMINDER_MODE", "morning")
+MIN_GAP = 45   # 最短空檔分鐘數
+DAY_START = 8
+DAY_END = 22
 
 
 def send_line(msg: str) -> None:
@@ -42,7 +36,10 @@ def send_line(msg: str) -> None:
     print(f"已發送：{msg[:30]}…")
 
 
-def _gcal_creds() -> Credentials:
+def _gcal_creds():
+    # 延遲 import：evening 模式不需要 google 套件
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request as GRequest
     creds = Credentials(
         token=None,
         refresh_token=os.environ["GCAL_REFRESH_TOKEN"],
@@ -50,18 +47,22 @@ def _gcal_creds() -> Credentials:
         client_id=os.environ["GOOGLE_CLIENT_ID"],
         client_secret=os.environ["GOOGLE_CLIENT_SECRET"],
     )
-    creds.refresh(Request())
+    creds.refresh(GRequest())
     return creds
 
 
 def _to_tw(dt_str: str) -> datetime:
-    """RFC3339 字串轉台灣時間 datetime"""
     dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
     return dt.astimezone(TZ)
 
 
 def get_today_events() -> list[tuple[datetime, datetime]]:
     """取得今天 iCloud（全部行事曆）+ Google Calendar（柔力場館）的有時間事件"""
+    # 延遲 import：evening 模式不需要這些套件
+    import caldav
+    from googleapiclient.discovery import build
+
+    icloud_pass = os.environ["ICLOUD_PASSWORD"]
     today = date.today()
     window_start = TZ.localize(datetime(today.year, today.month, today.day, DAY_START, 0))
     window_end = TZ.localize(datetime(today.year, today.month, today.day, DAY_END, 0))
@@ -72,7 +73,7 @@ def get_today_events() -> list[tuple[datetime, datetime]]:
         client = caldav.DAVClient(
             url="https://caldav.icloud.com",
             username=ICLOUD_USER,
-            password=ICLOUD_PASS,
+            password=icloud_pass,
         )
         for cal in client.principal().calendars():
             try:
@@ -83,14 +84,8 @@ def get_today_events() -> list[tuple[datetime, datetime]]:
                         dt_e = comp.get("DTEND").dt
                         if isinstance(dt_s, date) and not isinstance(dt_s, datetime):
                             continue  # 全天事件跳過
-                        if dt_s.tzinfo is None:
-                            dt_s = TZ.localize(dt_s)
-                        else:
-                            dt_s = dt_s.astimezone(TZ)
-                        if dt_e.tzinfo is None:
-                            dt_e = TZ.localize(dt_e)
-                        else:
-                            dt_e = dt_e.astimezone(TZ)
+                        dt_s = dt_s.astimezone(TZ) if dt_s.tzinfo else TZ.localize(dt_s)
+                        dt_e = dt_e.astimezone(TZ) if dt_e.tzinfo else TZ.localize(dt_e)
                         events.append((dt_s, dt_e))
                     except Exception:
                         pass
@@ -117,7 +112,6 @@ def get_today_events() -> list[tuple[datetime, datetime]]:
     except Exception as e:
         print(f"Google Calendar 讀取失敗：{e}", file=sys.stderr)
 
-
     return sorted(events)
 
 
@@ -127,7 +121,6 @@ def find_best_slot(events: list[tuple[datetime, datetime]]) -> list[tuple[dateti
     window_start = TZ.localize(datetime(today.year, today.month, today.day, DAY_START, 0))
     window_end = TZ.localize(datetime(today.year, today.month, today.day, DAY_END, 0))
 
-    # 合併重疊事件
     merged: list[list[datetime]] = []
     for s, e in events:
         s = max(s, window_start)
@@ -139,7 +132,6 @@ def find_best_slot(events: list[tuple[datetime, datetime]]) -> list[tuple[dateti
         else:
             merged.append([s, e])
 
-    # 列出空檔
     gaps = []
     cursor = window_start
     for s, e in merged:
@@ -168,7 +160,6 @@ def morning_reminder() -> None:
         )
         return
 
-    # 選最長空檔
     best = max(gaps, key=lambda g: g[2])
     g_start, g_end, g_mins = best
 
