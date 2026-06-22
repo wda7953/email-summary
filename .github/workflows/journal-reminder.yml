@@ -1,0 +1,17 @@
+name: 每日日記提醒
+
+on:
+  schedule:
+    - cron: '0 13 * * *'  # 每天 21:00 台灣時間（UTC+8）
+  workflow_dispatch:
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 傳送 LINE 提醒
+        run: |
+          curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Authorization: Bearer ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"to": "${{ secrets.LINE_USER_ID }}", "messages": [{"type": "text", "text": "📔 今天的日記還沒寫，記錄一下今天吧！\n在 Claude Code 輸入 /Hi 後說 journal 即可開始。"}]}'
