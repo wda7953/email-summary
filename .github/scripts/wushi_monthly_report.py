@@ -33,9 +33,11 @@ def fetch_events(year, month):
     wushi   = next((c for c in client.principal().calendars() if "武士" in str(c.get_display_name())), None)
     if not wushi: raise ValueError("找不到武士行事曆")
     next_m  = date(year + (month // 12), month % 12 + 1, 1)
-    raw     = wushi.date_search(
+    raw     = wushi.search(
         start=datetime(year, month, 1, 0, 0, tzinfo=TZ),
         end=datetime(next_m.year, next_m.month, next_m.day, 0, 0, tzinfo=TZ),
+        event=True,
+        expand=True,
     )
     events = []
     for ev in raw:
