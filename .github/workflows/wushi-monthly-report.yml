@@ -24,7 +24,7 @@ jobs:
     if: needs.check.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: 安裝 Python 套件
         run: pip install caldav pytz requests
