@@ -24,109 +24,15 @@ jobs:
     if: needs.check.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: 安裝 Python 套件
         run: pip install caldav pytz requests
 
-      - name: 下載報告腳本
-        run: |
-          cat << 'SCRIPT' > wushi_monthly_report.py
-import re, sys, os
-from collections import Counter
-from datetime import date, timedelta, datetime
-import caldav, pytz, requests
-
-TZ = pytz.timezone("Asia/Taipei")
-ICLOUD_USER = os.environ["ICLOUD_USERNAME"]
-ICLOUD_PASS = os.environ["ICLOUD_PASSWORD"]
-LINE_TOKEN  = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
-LINE_UID    = os.environ["LINE_USER_ID"]
-
-SKIP_RE = re.compile(r"^(打掃|[xX]|.*另計|黃誼淇)")
-TIERS   = [1600, 1300, 1200, 1100, 1000, 990, 900, 500]
-
-def send_line(msg):
-    requests.post(
-        "https://api.line.me/v2/bot/message/push",
-        headers={"Authorization": f"Bearer {LINE_TOKEN}", "Content-Type": "application/json"},
-        json={"to": LINE_UID, "messages": [{"type": "text", "text": msg}]},
-        timeout=10,
-    )
-
-def parse_event(summary, ev_date):
-    if SKIP_RE.match(summary): return None
-    receipt = sum(int(m) for m in re.findall(r"收(\d+)", summary))
-    nums    = [int(n) for n in re.findall(r"\d+", summary) if 500 <= int(n) <= 1600]
-    price   = nums[-1] if nums else 900
-    name    = re.sub(r"\d.*", "", summary).strip()
-    return {"date": ev_date, "name": name, "price": price, "receipt_amt": receipt} if name else None
-
-def fetch_events(year, month):
-    client  = caldav.DAVClient(url="https://caldav.icloud.com", username=ICLOUD_USER, password=ICLOUD_PASS)
-    wushi   = next((c for c in client.principal().calendars() if "武士" in str(c.get_display_name())), None)
-    if not wushi: raise ValueError("找不到武士行事曆")
-    next_m  = date(year + (month // 12), month % 12 + 1, 1)
-    raw     = wushi.date_search(
-        start=datetime(year, month, 1, 0, 0, tzinfo=TZ),
-        end=datetime(next_m.year, next_m.month, next_m.day, 0, 0, tzinfo=TZ),
-    )
-    events = []
-    for ev in raw:
-        try:
-            comp = ev.icalendar_component
-            dt   = comp.get("DTSTART").dt
-            d    = dt.date() if hasattr(dt, "date") else dt
-            p    = parse_event(str(comp.get("SUMMARY", "")), d)
-            if p: events.append(p)
-        except: pass
-    return events
-
-def week_ranges(year, month):
-    last = (date(year + (month // 12), month % 12 + 1, 1) - timedelta(days=1)).day
-    weeks, start = [], 1
-    while start <= last:
-        d   = date(year, month, start)
-        end = min(start + (6 - d.weekday()), last)
-        weeks.append((date(year, month, start), date(year, month, end)))
-        start = end + 1
-    return weeks
-
-def format_report(month, ws, we, sessions, receipts):
-    renewal_amt   = sum(r["receipt_amt"] for r in receipts)
-    renewal_names = [r["name"] for r in receipts]
-    tier_names    = {t: [] for t in TIERS}
-    for s in sessions:
-        if s["price"] in tier_names: tier_names[s["price"]].append(s["name"])
-    lines = [
-        f"{month}/{ws.day}-{month}/{we.day} Olan週業績回報",
-        f"當週續約金額：{renewal_amt:,}",
-        f"當週總銷售金額：{renewal_amt:,}",
-        f"當週總執行堂數：{len(sessions)}",
-    ]
-    for t in TIERS:
-        nc  = Counter(tier_names[t])
-        ns  = "  " + "、".join(f"{n} × {c}" if c > 1 else n for n, c in nc.items()) if nc else ""
-        lines.append(f"{t}（{len(tier_names[t])}）{ns}")
-    lines.append("體驗/成交：")
-    lines.append(f"當週續約人數：{len(renewal_names)}（{'、'.join(renewal_names)}）" if renewal_names else "當週續約人數：0")
-    return "\n".join(lines)
-
-today = date.today()
-year  = int(sys.argv[1]) if len(sys.argv) > 1 else today.year
-month = int(sys.argv[2]) if len(sys.argv) > 2 else today.month
-events = fetch_events(year, month)
-send_line(f"【{year}年{month}月武士業績回報】")
-for ws, we in week_ranges(year, month):
-    s = [e for e in events if ws <= e["date"] <= we]
-    r = [e for e in s if e["receipt_amt"] > 0]
-    send_line(format_report(month, ws, we, s, r))
-    print(f"已傳：{ws}–{we}")
-print("完成！")
-SCRIPT
-
       - name: 執行報告腳本
         env:
-          ICLOUD_USERNAME:          ${{ secrets.ICLOUD_USERNAME }}
-          ICLOUD_PASSWORD:          ${{ secrets.ICLOUD_PASSWORD }}
+          ICLOUD_USERNAME:           ${{ secrets.ICLOUD_USERNAME }}
+          ICLOUD_PASSWORD:           ${{ secrets.ICLOUD_PASSWORD }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
-          LINE_USER_ID:             ${{ secrets.LINE_USER_ID }}
-        run: python wushi_monthly_report.py
+          LINE_USER_ID:              ${{ secrets.LINE_USER_ID }}
+        run: python .github/scripts/wushi_monthly_report.py
