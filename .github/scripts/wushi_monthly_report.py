@@ -9,7 +9,7 @@ ICLOUD_PASS = os.environ["ICLOUD_PASSWORD"]
 LINE_TOKEN  = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 LINE_UID    = os.environ["LINE_USER_ID"]
 
-SKIP_RE = re.compile(r"^(打掃|[xX]|.*另計|黃誼淇)")
+SKIP_RE = re.compile(r"^(打掃|[xX]|.*另計|黃誼淇|鳳甲國中)")
 TIERS   = [1600, 1300, 1200, 1100, 1000, 990, 900, 500]
 
 def send_line(msg):
