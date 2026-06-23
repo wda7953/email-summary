@@ -1,0 +1,35 @@
+name: debug-calendar
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 安裝套件
+        run: pip install caldav pytz
+
+      - name: 列出六月第二週事件
+        env:
+          ICLOUD_USERNAME: ${{ secrets.ICLOUD_USERNAME }}
+          ICLOUD_PASSWORD: ${{ secrets.ICLOUD_PASSWORD }}
+        run: |
+          python3 << 'PYEOF'
+          import os, caldav, pytz
+          from datetime import datetime, date
+          TZ = pytz.timezone("Asia/Taipei")
+          client = caldav.DAVClient(url="https://caldav.icloud.com",
+                                    username=os.environ["ICLOUD_USERNAME"],
+                                    password=os.environ["ICLOUD_PASSWORD"])
+          wushi = next((c for c in client.principal().calendars() if "武士" in str(c.get_display_name())), None)
+          raw = wushi.date_search(
+              start=datetime(2026, 6, 8, 0, 0, tzinfo=TZ),
+              end=datetime(2026, 6, 15, 0, 0, tzinfo=TZ),
+          )
+          for ev in raw:
+              comp = ev.icalendar_component
+              dt = comp.get("DTSTART").dt
+              d = dt.date() if hasattr(dt, "date") else dt
+              print(f"{d} | {comp.get('SUMMARY', '(no title)')}")
+          PYEOF
