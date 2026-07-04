@@ -1,5 +1,5 @@
 import os, requests
-from datetime import date, timedelta
+from datetime import date
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -26,18 +26,25 @@ sheets_svc = build("sheets", "v4", credentials=creds)
 sheet_name = f"{month}月"
 result = sheets_svc.spreadsheets().values().get(
     spreadsheetId=os.environ["MENGJE_SHEET_ID"],
-    range=f"\'{sheet_name}\'!A4:D100",
+    range=f"'{sheet_name}'!A1:Z6",
 ).execute()
 rows = result.get("values", [])
 print(f"讀取 {sheet_name}，共 {len(rows)} 列")
 
+def to_int(s):
+    """千分位逗號字串轉整數，例如 '2,000' -> 2000"""
+    return int(str(s).replace(",", "")) if s not in (None, "") else 0
+
+# 新版表格為橫向格式（欄列互換）：
+# row0 = 日期標題列（最後一欄是「當月合計」）
+# row1 = 當週續約金額（本次結算未使用，保留給未來擴充）
+# row2 = 當週銷售總額（本次結算未使用，保留給未來擴充）
+# row3~4 = 2 個單價列（1400/1300），最後一欄是當月合計堂數
 total_gross = 0
-for row in rows:
-    if not row or not row[0] or row[0] == "當月合計":
-        break
-    for i, price in enumerate(PRICES):
-        count = int(row[1 + i]) if len(row) > 1 + i and row[1 + i] else 0
-        total_gross += price * count
+for i, price in enumerate(PRICES):
+    row = rows[3 + i]
+    count = to_int(row[-1]) if len(row) > 1 else 0
+    total_gross += price * count
 
 mengje_pay    = total_gross * 0.65
 studio_income = total_gross * 0.35
