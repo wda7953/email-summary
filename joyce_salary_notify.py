@@ -35,14 +35,18 @@ print(f"讀取 {sheet_name}，共 {len(rows)} 列")
 # row2 = 當週銷售總額（本次結算未使用，保留給未來擴充）
 # row3~9 = 7 個單價列（1100~400），最後一欄是當月合計堂數
 # row10 = 場租費（合併儲存格，只有 B 欄有值，代表整月租金）
+def to_int(s):
+    """千分位逗號字串轉整數，例如 '2,000' -> 2000"""
+    return int(str(s).replace(",", "")) if s not in (None, "") else 0
+
 total_gross = 0
 for i, price in enumerate(PRICES):
     row = rows[3 + i]
-    count = int(row[-1]) if len(row) > 1 and row[-1] else 0
+    count = to_int(row[-1]) if len(row) > 1 else 0
     total_gross += price * count
 
 rent_row = rows[10] if len(rows) > 10 else []
-total_venue = int(rent_row[1]) if len(rent_row) > 1 and rent_row[1] else 0
+total_venue = to_int(rent_row[1]) if len(rent_row) > 1 else 0
 
 joyce_pay     = total_gross * 0.6 - total_venue
 studio_income = total_gross * 0.4
