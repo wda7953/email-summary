@@ -1,5 +1,5 @@
 """
-監控 Liz Lee (LizL@gratzpilates.com) 是否回覆 Gratz Order #34344
+監控 Liz Lee (LizL@gratzpilates.com) 是否回覆 Gratz Estimate Request
 有新信就傳 LINE 通知。每小時執行，搜尋最近 90 分鐘內的來信。
 """
 import os
@@ -17,7 +17,7 @@ LINE_TOKEN          = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
 LINE_USER_ID        = os.environ["LINE_USER_ID"]
 
 SENDER_EMAIL = "LizL@gratzpilates.com"
-SUBJECT_KEYWORD = "Gratz Order #34344"
+SUBJECT_KEYWORD = "Gratz Estimate"
 CHECK_MINUTES = 90  # 搜尋最近 90 分鐘，確保不會因排程誤差漏掉
 
 
@@ -65,7 +65,7 @@ def main():
     service = get_gmail_service()
     since_ts = int((datetime.now(timezone.utc) - timedelta(minutes=CHECK_MINUTES)).timestamp())
 
-    query = f"from:{SENDER_EMAIL} subject:{SUBJECT_KEYWORD} after:{since_ts}"
+    query = f'from:{SENDER_EMAIL} subject:"{SUBJECT_KEYWORD}" after:{since_ts}'
     result = service.users().messages().list(userId="me", q=query, maxResults=5).execute()
     messages = result.get("messages", [])
 
