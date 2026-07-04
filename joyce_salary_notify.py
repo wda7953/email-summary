@@ -49,7 +49,7 @@ rent_row = rows[10] if len(rows) > 10 else []
 total_venue = to_int(rent_row[1]) if len(rent_row) > 1 else 0
 
 joyce_pay     = total_gross * 0.6 - total_venue
-studio_income = total_gross * 0.4
+studio_income = total_gross * 0.4 + total_venue
 msg = f"JOYCE {year}/{month:02d} 薪資結算\n應付薪資：${joyce_pay:,.0f}\n工作室收入：${studio_income:,.0f}"
 
 resp = requests.post(
