@@ -1,5 +1,5 @@
 import os, requests
-from datetime import date, timedelta
+from datetime import date
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
@@ -24,20 +24,25 @@ sheets_svc = build("sheets", "v4", credentials=creds)
 sheet_name = f"{month}月"
 result = sheets_svc.spreadsheets().values().get(
     spreadsheetId=os.environ["GSHEET_ID"],
-    range=f"\'{sheet_name}\'!A4:I100",
+    range=f"'{sheet_name}'!A1:Z11",
 ).execute()
 rows = result.get("values", [])
 print(f"讀取 {sheet_name}，共 {len(rows)} 列")
 
-total_gross, total_venue = 0, 0
-for row in rows:
-    if not row or not row[0] or row[0] == "當月合計":
-        break
-    for i, price in enumerate(PRICES):
-        count = int(row[1 + i]) if len(row) > 1 + i and row[1 + i] else 0
-        total_gross += price * count
-    venue = int(row[8]) if len(row) > 8 and row[8] else 0
-    total_venue += venue
+# 新版表格為橫向格式（欄列互換）：
+# row0 = 日期標題列（最後一欄是「當月合計」）
+# row1 = 當週續約金額（本次結算未使用，保留給未來擴充）
+# row2 = 當週銷售總額（本次結算未使用，保留給未來擴充）
+# row3~9 = 7 個單價列（1100~400），最後一欄是當月合計堂數
+# row10 = 場租費（合併儲存格，只有 B 欄有值，代表整月租金）
+total_gross = 0
+for i, price in enumerate(PRICES):
+    row = rows[3 + i]
+    count = int(row[-1]) if len(row) > 1 and row[-1] else 0
+    total_gross += price * count
+
+rent_row = rows[10] if len(rows) > 10 else []
+total_venue = int(rent_row[1]) if len(rent_row) > 1 and rent_row[1] else 0
 
 joyce_pay     = total_gross * 0.6 - total_venue
 studio_income = total_gross * 0.4
