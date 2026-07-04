@@ -37,12 +37,11 @@ def to_int(s):
 
 # 新版表格為橫向格式（欄列互換）：
 # row0 = 日期標題列（最後一欄是「當月合計」）
-# row1 = 當週續約金額（本次結算未使用，保留給未來擴充）
-# row2 = 當週銷售總額（本次結算未使用，保留給未來擴充）
-# row3~4 = 2 個單價列（1400/1300），最後一欄是當月合計堂數
+# row1 = 當週銷售總額（本次結算未使用，保留給未來擴充）
+# row2~3 = 2 個單價列（1400/1300），最後一欄是當月合計堂數
 total_gross = 0
 for i, price in enumerate(PRICES):
-    row = rows[3 + i]
+    row = rows[2 + i]
     count = to_int(row[-1]) if len(row) > 1 else 0
     total_gross += price * count
 
