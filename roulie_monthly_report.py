@@ -10,10 +10,10 @@ ICLOUD_USER = "wda7953@hotmail.com"
 ICLOUD_PASS = os.environ["ICLOUD_PASSWORD"]
 GCAL_ID = "1b49f93678583508e8185ed6fe71f414c19f09ff801eac2a7bbe08e28b22dd76@group.calendar.google.com"
 
-WUSHI_SKIP = re.compile(r"^(打掃|[xX]|.*另計|黃誼淇)")
+WUSHI_SKIP = re.compile(r"^(打掃|[xX]|.*另計|黃誼淇|鳳甲國中)")
 ROULIE_PER_SESSION = {
     "品漩": 600, "蔡清蓉": 1000, "蔡青蓉": 1000,
-    "鳳琴姊": 700, "鳳琴姐": 700, "仁哥": 700,
+    "鳳琴姊": 700, "鳳琴姐": 700, "仁哥": 700, "育睿": 1500,
 }
 HOURLY_RATE = 700
 
@@ -33,7 +33,7 @@ def fetch_wushi(year, month):
     cal = icloud_cal("武士")
     start, end = month_range(year, month)
     sessions, gross = 0, 0
-    for ev in cal.date_search(start=start, end=end):
+    for ev in cal.search(start=start, end=end, event=True, expand=True):
         try:
             comp = ev.icalendar_component
             summary = str(comp.get("SUMMARY", ""))
@@ -47,11 +47,16 @@ def fetch_wushi(year, month):
             pass
     return sessions, gross
 
+def extract_roulie_name(summary):
+    name = re.sub(r"[（(]柔力[)）]", "", summary)
+    name = re.sub(r"\d.*$", "", name).strip()
+    return name
+
 def fetch_roulie_icloud(year, month):
     cal = icloud_cal("工作室")
     start, end = month_range(year, month)
     events = []
-    for ev in cal.date_search(start=start, end=end):
+    for ev in cal.search(start=start, end=end, event=True, expand=True):
         try:
             comp = ev.icalendar_component
             summary = str(comp.get("SUMMARY", ""))
@@ -60,7 +65,7 @@ def fetch_roulie_icloud(year, month):
             dt_s = comp.get("DTSTART").dt
             dt_e = comp.get("DTEND").dt if comp.get("DTEND") else None
             hours = (dt_e - dt_s).total_seconds() / 3600 if (dt_e and hasattr(dt_s, "hour")) else 0
-            name = re.sub(r"[（(]柔力[)）].*", "", summary).strip()
+            name = extract_roulie_name(summary)
             events.append({"name": name, "hours": hours})
         except:
             pass
@@ -92,7 +97,7 @@ def fetch_roulie_gcal(year, month):
         dt_s = datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(TZ)
         dt_e = datetime.fromisoformat(e.replace("Z", "+00:00")).astimezone(TZ)
         hours = (dt_e - dt_s).total_seconds() / 3600
-        name = "Olan" if is_olan else re.sub(r"[（(]柔力[)）].*", "", summary).strip()
+        name = "Olan" if is_olan else extract_roulie_name(summary)
         events.append({"name": name, "hours": hours})
     return events
 
