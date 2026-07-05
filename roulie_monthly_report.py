@@ -32,7 +32,7 @@ def icloud_cal(name_kw):
 def fetch_wushi(year, month):
     cal = icloud_cal("武士")
     start, end = month_range(year, month)
-    sessions, gross = 0, 0
+    sessions, gross, hours = 0, 0, 0.0
     for ev in cal.search(start=start, end=end, event=True, expand=True):
         try:
             comp = ev.icalendar_component
@@ -41,11 +41,14 @@ def fetch_wushi(year, month):
                 continue
             nums = [int(n) for n in re.findall(r"\d+", summary) if 500 <= int(n) <= 1600]
             price = nums[-1] if nums else 900
+            dt_s = comp.get("DTSTART").dt
+            dt_e = comp.get("DTEND").dt if comp.get("DTEND") else None
+            hours += (dt_e - dt_s).total_seconds() / 3600 if dt_e else 1.0
             sessions += 1
             gross += price
         except:
             pass
-    return sessions, gross
+    return sessions, gross, hours
 
 def extract_roulie_name(summary):
     name = re.sub(r"[（(]柔力[)）]", "", summary)
@@ -107,7 +110,7 @@ def main():
     year, month = last.year, last.month
     print(f"計算 {year}/{month}...")
 
-    w_sessions, w_gross = fetch_wushi(year, month)
+    w_sessions, w_gross, w_hours = fetch_wushi(year, month)
     w_income = round(w_gross * 0.6)
 
     r_events = fetch_roulie_icloud(year, month) + fetch_roulie_gcal(year, month)
@@ -123,6 +126,8 @@ def main():
         else:
             r_sessions += 1
             r_prepay += 1
+    r_hours = sum(ev["hours"] for ev in r_events)
+    total_hours = w_hours + r_hours
 
     msg = (
         f"【{year}年{month}月 收入月報】\n"
@@ -130,6 +135,7 @@ def main():
         f"＝工時＝\n"
         f"武士：{w_sessions} 堂\n"
         f"柔力：{r_sessions} 堂 + {r_olan_hrs:.1f} 小時 Olan\n"
+        f"總工時：{total_hours:.1f} 小時\n"
         f"\n"
         f"＝收入＝\n"
         f"武士：${w_income:,}（原始 ${w_gross:,} × 60%）\n"
