@@ -1,14 +1,11 @@
 name: 皮拉提斯自主練習提醒
 
 on:
-  schedule:
-    - cron: '47 23 * * *'   # 每天 07:47 台灣時間（UTC+8），避開 00:00 UTC 尖峰時段
-  workflow_dispatch:
+  workflow_dispatch:  # 由 cron-job.org 觸發（GitHub schedule 常態延遲 10+ 小時，改外部觸發）
 
 jobs:
   morning-remind:
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '47 23 * * *'
     steps:
       - uses: actions/checkout@v4
 
