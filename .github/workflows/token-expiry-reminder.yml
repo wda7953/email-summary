@@ -1,0 +1,25 @@
+name: GitHub Token 到期提醒
+
+# 每年 6/26 09:00 台灣時間提醒檢查 cron-job.org 上的 GitHub Token 效期
+# （2027-07-26 這批到期；PAT 每年會過期，過期會讓 Email Summary/journal-reminder 靜默 401 失效）
+on:
+  schedule:
+    - cron: '0 1 26 6 *'  # 每年 6 月 26 日 01:00 UTC = 09:00 台灣時間
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 傳送 LINE Token 檢查提醒
+        run: |
+          curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Authorization: Bearer ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "to": "${{ secrets.LINE_USER_ID }}",
+              "messages": [{
+                "type": "text",
+                "text": "🔑 GitHub Token 到期檢查\n\ncron-job.org 上的 GitHub Token 每年會過期，過期後 Email Summary（每天10:00）與 journal-reminder（每天21:00）會靜默失效（HTTP 401）。\n\n請登入 https://console.cron-job.org 檢查這兩支 job 的 Token 效期，快到期就換一把新的（產生步驟問 AI 分身）。"
+              }]
+            }'
