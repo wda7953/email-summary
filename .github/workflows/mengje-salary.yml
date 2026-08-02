@@ -1,8 +1,7 @@
 name: 孟潔薪資通知
 
 on:
-  schedule:
-    - cron: '0 1 2 * *'   # 每月 2 日 09:00 台灣時間
+  # 每月 2 日 09:00 台灣時間，由 cron-job.org 外部觸發（GitHub 內建排程不可靠，2026-08-02 移除）
   workflow_dispatch:
 
 jobs:
