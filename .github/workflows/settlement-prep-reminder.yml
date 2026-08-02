@@ -1,0 +1,16 @@
+name: 月底結算前置提醒
+
+on:
+  # 每月 26 日 09:00 台灣時間，由 cron-job.org 外部觸發（GitHub 內建排程不可靠）
+  workflow_dispatch:
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 傳送 LINE 提醒
+        run: |
+          curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Authorization: Bearer ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"to": "${{ secrets.LINE_USER_ID }}", "messages": [{"type": "text", "text": "📌 月底提醒：月底前把 Joyce 與孟潔本月課費資料補齊/確認，下月初才能算薪資結算（收款/上課/付教練/柔力抽/未實現）。⚠️ Joyce 目前還缺之前的資料，要先補上才能計算。"}]}'
