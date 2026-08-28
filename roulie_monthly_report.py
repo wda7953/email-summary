@@ -32,7 +32,7 @@ def icloud_cal(name_kw):
 def fetch_wushi(year, month):
     cal = icloud_cal("武士")
     start, end = month_range(year, month)
-    sessions, gross, hours = 0, 0, 0.0
+    sessions, gross, hours, defaults = 0, 0, 0.0, 0
     for ev in cal.search(start=start, end=end, event=True, expand=True):
         try:
             comp = ev.icalendar_component
@@ -41,6 +41,8 @@ def fetch_wushi(year, month):
                 continue
             nums = [int(n) for n in re.findall(r"\d+", summary) if 500 <= int(n) <= 1600]
             price = nums[-1] if nums else 900
+            if not nums:              # 摘要抓不到金額 → 用 900 預設（A3：統計預設次數）
+                defaults += 1
             dt_s = comp.get("DTSTART").dt
             dt_e = comp.get("DTEND").dt if comp.get("DTEND") else None
             hours += (dt_e - dt_s).total_seconds() / 3600 if dt_e else 1.0
@@ -48,7 +50,7 @@ def fetch_wushi(year, month):
             gross += price
         except:
             pass
-    return sessions, gross, hours
+    return sessions, gross, hours, defaults
 
 def extract_roulie_name(summary):
     name = re.sub(r"[（(]柔力[)）]", "", summary)
@@ -95,7 +97,10 @@ def fetch_roulie_gcal(year, month):
         is_olan = bool(re.search(r"\bolan\b", summary, re.IGNORECASE))
         if not (is_olan or "柔力" in summary):
             continue
-        s = item["start"].get("dateTime", item["start"].get("date"))
+        # B3：跳過全天事件（無 dateTime）。全天事件會被算成 24 小時倍數，多為個人行程非上課
+        if not item["start"].get("dateTime"):
+            continue
+        s = item["start"]["dateTime"]
         e = item["end"].get("dateTime", item["end"].get("date"))
         dt_s = datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(TZ)
         dt_e = datetime.fromisoformat(e.replace("Z", "+00:00")).astimezone(TZ)
@@ -110,11 +115,12 @@ def main():
     year, month = last.year, last.month
     print(f"計算 {year}/{month}...")
 
-    w_sessions, w_gross, w_hours = fetch_wushi(year, month)
+    w_sessions, w_gross, w_hours, w_defaults = fetch_wushi(year, month)
     w_income = round(w_gross * 0.6)
 
     r_events = fetch_roulie_icloud(year, month) + fetch_roulie_gcal(year, month)
     r_sessions, r_prepay, r_olan_hrs, r_income = 0, 0, 0.0, 0
+    prepay_names = {}  # B2：記下被當成預收款的姓名＋堂數，列進月報供人工核（抓「新學員/打錯字被靜默漏算」）
     for ev in r_events:
         name, hours = ev["name"], ev["hours"]
         if name == "Olan":
@@ -126,8 +132,23 @@ def main():
         else:
             r_sessions += 1
             r_prepay += 1
+            if name:
+                prepay_names[name] = prepay_names.get(name, 0) + 1
     r_hours = sum(ev["hours"] for ev in r_events)
     total_hours = w_hours + r_hours
+
+    # ── 複查自檢：發出前驗證幾條規則，不通過就在訊息開頭標警告 ──
+    warnings = []
+    # 1) 三個來源全 0（行事曆讀取失敗／授權過期／月份無資料，最容易被忽略的靜默錯）
+    if w_sessions == 0 and r_sessions == 0 and r_olan_hrs == 0:
+        warnings.append("武士＋柔力皆抓到 0 堂，行事曆可能讀取失敗、授權過期或該月無資料")
+    # 2) 有柔力事件解析不到姓名（抽成/預收歸屬會錯）
+    unnamed = sum(1 for ev in r_events if not ev["name"])
+    if unnamed:
+        warnings.append(f"{unnamed} 筆柔力事件無法解析姓名，收入歸屬可能有誤")
+    # 3) 武士全部堂數都靠 900 預設（單一堂 900 屬正常，但「整月每堂都抓不到金額」＝價格格式可能全變了）
+    if w_sessions >= 3 and w_defaults == w_sessions:
+        warnings.append(f"武士 {w_sessions} 堂全部用 900 預設（都抓不到金額），價格格式可能已改變")
 
     msg = (
         f"【{year}年{month}月 收入月報】\n"
@@ -142,6 +163,12 @@ def main():
         f"柔力：${r_income:,}\n"
         f"預收款：（另計）"
     )
+    if prepay_names:
+        # 列出被歸為預收款的人（含堂數），方便核對有沒有新學員/打錯字被漏算
+        detail = "、".join(f"{n}×{c}" for n, c in sorted(prepay_names.items()))
+        msg += f"\n預收名單：{detail}"
+    if warnings:
+        msg = "⚠️ 複查警告（請人工確認後再採用）\n" + "\n".join(f"・{w}" for w in warnings) + "\n\n" + msg
     print(msg)
 
     resp = requests.post(
