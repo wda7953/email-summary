@@ -112,7 +112,9 @@ for m in range(5, 13):
     p, g = month_paid_gross(f"{m}月")
     cum_paid += p
     cum_gross += g
-cum_unrealized = cum_paid - cum_gross
+# 未實現＝預收但未上課的錢，本質 ≥ 0；跌破 0 代表已實現超過收款＝學員端呈應收，不是負預收。
+cum_unrealized_raw = cum_paid - cum_gross
+cum_unrealized = max(0, cum_unrealized_raw)
 if read_errors:                       # 有分頁讀取失敗＝累計可能偏低，發警告別無聲
     warnings.append("累計未實現有分頁讀取失敗（數字可能偏低）：" + "、".join(read_errors))
 if year != 2026:
@@ -122,6 +124,8 @@ msg = f"孟潔 {year}/{month:02d} 薪資結算\n應付薪資：${mengje_pay:,.0f
 if total_paid > 0:
     msg += f"\n（當月收款 ${total_paid:,}｜當月未實現 ${total_paid - total_gross:,}）"
 msg += f"\n📊 累計未實現(預收餘額)：${cum_unrealized:,}"
+if cum_unrealized_raw < 0:
+    msg += f"（已實現超收款 ${-cum_unrealized_raw:,}，學員端呈應收，故預收以0計）"
 if warnings:
     msg = "⚠️ 複查警告（請人工確認後再採用）\n" + "\n".join(f"・{w}" for w in warnings) + "\n\n" + msg
 
