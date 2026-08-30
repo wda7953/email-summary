@@ -148,7 +148,8 @@ if year != 2026:
 
 msg = f"JOYCE {year}/{month:02d} 薪資結算\n應付薪資：${joyce_pay:,.0f}\n工作室收入：${studio_income:,.0f}"
 if total_paid > 0:
-    msg += f"\n（當月收款 ${total_paid:,}｜當月未實現 ${total_paid - total_gross:,}）"
+    msg += f"\n（當月收款 ${total_paid:,}）"
+# 未實現只看「開始執行到結算」的累計（預收款常跨月上完，當月未實現無意義）
 msg += f"\n📊 累計未實現(預收餘額)：${cum_unrealized:,}"
 if cum_unrealized_raw < 0:
     msg += f"（已實現超收款 ${-cum_unrealized_raw:,}，學員端呈應收，故預收以0計）"
