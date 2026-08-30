@@ -84,18 +84,23 @@ if total_paid > 0 and total_gross > total_paid:
 
 # ── 累計未實現（真實預收餘額）＝ 全期間收款Σ − 已實現Σ ──
 # 孟潔 2026-05 才開始上課，故掃 5~12 月各分頁累加（未來空白月＝0，不影響）。
+read_errors = []
 def month_paid_gross(tab):
-    """讀孟潔單月分頁 → (當月收款, 當月已實現)。分頁不存在或空白回 (0,0)。"""
+    """讀孟潔單月分頁 → (當月收款, 當月已實現)。分頁不存在或空白回 (0,0)；讀取失敗記入 read_errors。"""
     try:
         rr = sheets_svc.spreadsheets().values().get(
             spreadsheetId=os.environ["MENGJE_SHEET_ID"], range=f"'{tab}'!A1:Z30",
         ).execute().get("values", [])
-    except Exception:
+    except Exception as e:
+        read_errors.append(f"{tab}（{e}）")
         return 0, 0
     if not rr:
         return 0, 0
     hd = rr[0]
-    tc = next((i for i, c in enumerate(hd) if "合計" in str(c)), len(hd) - 1)
+    tc = next((i for i, c in enumerate(hd) if "合計" in str(c)), None)
+    if tc is None:                    # 找不到「合計」欄＝格式異常，別硬抓最後一欄算錯
+        read_errors.append(f"{tab}（找不到合計欄）")
+        return 0, 0
     def _ct(row):
         return to_int(row[tc]) if len(row) > tc else 0
     g = sum(price_of(r) * _ct(r) for r in rr if price_of(r) is not None)
@@ -108,6 +113,8 @@ for m in range(5, 13):
     cum_paid += p
     cum_gross += g
 cum_unrealized = cum_paid - cum_gross
+if read_errors:                       # 有分頁讀取失敗＝累計可能偏低，發警告別無聲
+    warnings.append("累計未實現有分頁讀取失敗（數字可能偏低）：" + "、".join(read_errors))
 if year != 2026:
     warnings.append(f"累計未實現目前假設孟潔 2026-05 起算，現在是 {year} 年，跨年請確認累計範圍是否要往前併")
 

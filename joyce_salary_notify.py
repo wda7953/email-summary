@@ -84,41 +84,62 @@ if total_paid > 0 and total_gross > total_paid:
 if joyce_pay < 0:
     warnings.append(f"應付薪資為負(${joyce_pay:,.0f})，場租費可能填錯")
 
-# ── 累計未實現（真實預收餘額）＝ 全期間收款Σ − 已實現Σ ──
+# ── 累計未實現（真實預收餘額）＝ 全期間收款Σ − 已實現Σ − 轉出退費Σ ──
 # 「歷史2023-2026.05」分頁的合計列已含 2023-05~2026-05；當年 6 月起再從各月分頁累加。
 # 未來空白月份 (收款,已實現)=(0,0) 不影響，故直接掃 6~12 月。
+# 退費說明（2026-08-30 使用者確認）：歷史表「退費」欄＝原本收的錢「轉去 Joyce 私教課」
+#   （只收場地費、課費不經過柔力），這筆已離開柔力、不再是預收負債，故從未實現扣掉。
+#   ⚠️ 2026-03 的「真退客戶」那筆不在退費欄，早已淨額寫進收款，不重複處理。
 HIST_TAB = "歷史2023-2026.05"
+read_errors = []
 def month_paid_gross(tab):
-    """讀 Joyce 單月分頁 → (當月收款, 當月已實現)。分頁不存在或空白回 (0,0)。"""
+    """讀 Joyce 單月分頁 → (當月收款, 當月已實現)。分頁不存在或空白回 (0,0)；讀取失敗記入 read_errors。"""
     try:
         rr = sheets_svc.spreadsheets().values().get(
             spreadsheetId=os.environ["GSHEET_ID"], range=f"'{tab}'!A1:Z11",
         ).execute().get("values", [])
-    except Exception:
+    except Exception as e:
+        read_errors.append(f"{tab}（{e}）")
         return 0, 0
     if not rr:
         return 0, 0
     hd = rr[0]
-    tc = next((i for i, c in enumerate(hd) if "合計" in str(c)), len(hd) - 1)
+    tc = next((i for i, c in enumerate(hd) if "合計" in str(c)), None)
+    if tc is None:                    # 找不到「合計」欄＝格式異常，別硬抓最後一欄算錯
+        read_errors.append(f"{tab}（找不到合計欄）")
+        return 0, 0
     def _ct(row):
         return to_int(row[tc]) if len(row) > tc else 0
     g = sum(p * _ct(rr[3 + i] if len(rr) > 3 + i else []) for i, p in enumerate(PRICES))
     sr = next((r for r in rr if r and "銷售總額" in str(r[0])), None)
     return (_ct(sr) if sr else 0), g
 
-hist = sheets_svc.spreadsheets().values().get(
-    spreadsheetId=os.environ["GSHEET_ID"], range=f"'{HIST_TAB}'!A1:M200",
-).execute().get("values", [])
+try:
+    hist = sheets_svc.spreadsheets().values().get(
+        spreadsheetId=os.environ["GSHEET_ID"], range=f"'{HIST_TAB}'!A1:Z200",
+    ).execute().get("values", [])
+except Exception as e:
+    hist = []
+    read_errors.append(f"{HIST_TAB}（{e}）")
+hist_hdr = hist[0] if hist else []
+def hist_col(name):               # 用欄名定位，不寫死索引（歷史表若插欄也不會錯抓）
+    return next((i for i, c in enumerate(hist_hdr) if str(c).strip() == name), None)
+ci_paid, ci_real, ci_ref = hist_col("收款"), hist_col("已實現"), hist_col("退費")
 hist_total = next((r for r in hist if r and str(r[0]).strip() == "合計"), None)
-if hist_total is None:
-    warnings.append(f"找不到歷史表「{HIST_TAB}」合計列，累計未實現只含當年各月")
-cum_paid = to_int(hist_total[1]) if hist_total and len(hist_total) > 1 else 0
-cum_gross = to_int(hist_total[10]) if hist_total and len(hist_total) > 10 else 0
+if hist_total is None or None in (ci_paid, ci_real, ci_ref):
+    warnings.append(f"歷史表「{HIST_TAB}」讀取異常（缺合計列或收款/已實現/退費欄），累計未實現只含當年各月")
+def hval(idx):
+    return to_int(hist_total[idx]) if hist_total and idx is not None and len(hist_total) > idx else 0
+cum_paid = hval(ci_paid)
+cum_gross = hval(ci_real)
+cum_refund = hval(ci_ref)         # 轉出退費（要扣）
 for m in range(6, 13):
     p, g = month_paid_gross(f"{m}月")
     cum_paid += p
     cum_gross += g
-cum_unrealized = cum_paid - cum_gross
+cum_unrealized = cum_paid - cum_gross - cum_refund
+if read_errors:                   # 有分頁讀取失敗＝累計可能偏低，發警告別無聲
+    warnings.append("累計未實現有分頁讀取失敗（數字可能偏低）：" + "、".join(read_errors))
 # 跨年守衛：歷史表只到 2026-05，換年前要先把 2026 整年併進歷史表，否則累計會漏
 if year != 2026:
     warnings.append(f"累計未實現的歷史表只到 2026-05，現在是 {year} 年，請先把 2026-06~12 併進歷史表再改此段（否則累計漏算）")
