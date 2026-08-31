@@ -120,9 +120,11 @@ if read_errors:                       # 有分頁讀取失敗＝累計可能偏�
 if year != 2026:
     warnings.append(f"累計未實現目前假設孟潔 2026-05 起算，現在是 {year} 年，跨年請確認累計範圍是否要往前併")
 
-msg = f"孟潔 {year}/{month:02d} 薪資結算\n應付薪資：${mengje_pay:,.0f}\n工作室收入：${studio_income:,.0f}"
-if total_paid > 0:
-    msg += f"\n（當月收款 ${total_paid:,}）"
+# 固定四項格式（2026-08-31 使用者確認）：收款、薪資、工作室收入、累計未實現
+msg = f"孟潔 {year}/{month:02d} 薪資結算"
+msg += f"\n收款：${total_paid:,}"
+msg += f"\n應付薪資：${mengje_pay:,.0f}"
+msg += f"\n工作室收入：${studio_income:,.0f}"
 # 未實現只看「開始執行到結算」的累計（預收款常跨月上完，當月未實現無意義）
 msg += f"\n📊 累計未實現(預收餘額)：${cum_unrealized:,}"
 if cum_unrealized_raw < 0:

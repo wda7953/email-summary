@@ -59,8 +59,17 @@ total_venue = to_int(rent_row[1]) if len(rent_row) > 1 else 0
 sales_row = next((r for r in rows if r and "銷售總額" in str(r[0])), None)
 total_paid = cell_total(sales_row) if sales_row else 0
 
-joyce_pay     = total_gross * 0.6 - total_venue
-studio_income = total_gross * 0.4 + total_venue
+# 當月「轉私教」費用：原本柔力收、但要轉給 Joyce 上私教課的錢（只收場地費、課費不經柔力）。
+# 柔力退給 Joyce → 加進 Joyce 實付、從工作室收入扣掉（兩邊相反，屬柔力↔Joyce 內部移轉）。
+# 月分頁若有「轉私教／退費」列就抓（合計欄優先，退回 B 欄），沒有則為 0。
+# ⚠️ 歷史的轉私教都記在「歷史2023-2026.05」退費欄、只用來扣累計未實現，不重複進當月實付。
+refund_row = next((r for r in rows if r and any(k in str(r[0]) for k in ("轉私教", "私教", "退費"))), None)
+month_refund = cell_total(refund_row) if refund_row else 0
+if refund_row and month_refund == 0 and len(refund_row) > 1:
+    month_refund = to_int(refund_row[1])
+
+joyce_pay     = total_gross * 0.6 - total_venue + month_refund
+studio_income = total_gross * 0.4 + total_venue - month_refund
 
 # ── 複查自檢：算完發出前驗證幾條規則，不通過就在訊息開頭標警告 ──
 warnings = []
@@ -146,9 +155,13 @@ if read_errors:                   # 有分頁讀取失敗＝累計可能偏低�
 if year != 2026:
     warnings.append(f"累計未實現的歷史表只到 2026-05，現在是 {year} 年，請先把 2026-06~12 併進歷史表再改此段（否則累計漏算）")
 
-msg = f"JOYCE {year}/{month:02d} 薪資結算\n應付薪資：${joyce_pay:,.0f}\n工作室收入：${studio_income:,.0f}"
-if total_paid > 0:
-    msg += f"\n（當月收款 ${total_paid:,}）"
+# 固定四項格式（2026-08-31 使用者確認）：收款、薪資、工作室收入、累計未實現
+msg = f"JOYCE {year}/{month:02d} 薪資結算"
+msg += f"\n收款：${total_paid:,}"
+msg += f"\n應付薪資：${joyce_pay:,.0f}"
+msg += f"\n工作室收入：${studio_income:,.0f}"
+if month_refund > 0:
+    msg += f"\n（薪資含轉私教 +${month_refund:,}、已扣場租 ${total_venue:,}）"
 # 未實現只看「開始執行到結算」的累計（預收款常跨月上完，當月未實現無意義）
 msg += f"\n📊 累計未實現(預收餘額)：${cum_unrealized:,}"
 if cum_unrealized_raw < 0:
