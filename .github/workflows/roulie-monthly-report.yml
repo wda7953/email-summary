@@ -1,37 +1,18 @@
 name: 收入月報（武士+柔力）
 
 on:
-  # 每月最後一天 23:00 台灣時間，由 cron-job.org 外部觸發（設每月 28-31 日 23:00，check job 判斷明天是不是 1 號，只有真月底才發）
-  # 2026-09-01 由「1 日 22:00」改為月底 23:00，與武士月業績報告同日發（22:00 武士、23:00 收入）
-  # 註：cron-job.org 走 workflow_dispatch，無法靠 event 名稱分辨，故一律用日期判斷；要手動測試按 force=true
+  # 每月 1 號 00:00 台灣時間，由 cron-job.org 外部觸發（Asia/Taipei，每月 1 號一次）
+  # 2026-09-01 由「1 日 22:00」改為「1 號 00:00」，與武士月業績報告同日（武士月底 22:00、收入次日 00:00）
+  # 腳本報「台灣昨天所屬的月」＝上月，整個 1 號都成立、不怕延遲，故不需日期判斷；要補其他月填 month
   workflow_dispatch:
     inputs:
-      force:
-        description: "強制發送（略過月底判斷，供手動測試）"
-        type: boolean
-        default: false
       month:
-        description: "指定月份補發，格式 YYYY-MM（留空＝依排程當月）；填了就一定發"
+        description: "指定月份補發，格式 YYYY-MM（留空＝依排程報上月）"
         type: string
         default: ""
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    outputs:
-      run: ${{ steps.date.outputs.run }}
-    steps:
-      - id: date
-        run: |
-          if [ "${{ inputs.force }}" = "true" ] || [ -n "${{ inputs.month }}" ] || [ "$(date -d tomorrow +%d)" = "01" ]; then
-            echo "run=true" >> $GITHUB_OUTPUT
-          else
-            echo "run=false" >> $GITHUB_OUTPUT
-          fi
-
   send-report:
-    needs: check
-    if: needs.check.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

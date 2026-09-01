@@ -1,5 +1,5 @@
 import os, re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import caldav, pytz, requests
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -110,13 +110,14 @@ def fetch_roulie_gcal(year, month):
     return events
 
 def main():
-    # 可用 MONTH_OVERRIDE=YYYY-MM 指定月份（手動補發用）；否則排程固定月底跑，報台灣時區本月
+    # 可用 MONTH_OVERRIDE=YYYY-MM 指定月份（手動補發用）；否則排程在「每月 1 號 00:00 台灣時間」觸發，
+    # 報的是「剛結束的那個月」＝台灣時間昨天所屬的月（1 號的昨天＝上月最後一天，且整個 1 號都成立、不怕延遲）
     override = os.environ.get("MONTH_OVERRIDE", "").strip()
     if override:
         year, month = int(override[:4]), int(override[5:7])
     else:
-        now_tw = datetime.now(TZ)
-        year, month = now_tw.year, now_tw.month
+        yday_tw = datetime.now(TZ) - timedelta(days=1)
+        year, month = yday_tw.year, yday_tw.month
     print(f"計算 {year}/{month}...")
 
     w_sessions, w_gross, w_hours, w_defaults = fetch_wushi(year, month)
