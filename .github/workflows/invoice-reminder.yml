@@ -1,8 +1,8 @@
 name: 每月開發票提醒
 
 on:
-  schedule:
-    - cron: '0 1 1 * *'  # 每月 1 日 09:00 台灣時間（UTC+8）
+  # 每月 1 號 09:00 台灣時間，由 cron-job.org 外部觸發（Asia/Taipei）
+  # 2026-09-01 由 GitHub 內建排程改成 workflow_dispatch：內建排程月初常漏發／延遲數小時
   workflow_dispatch:
 
 jobs:
