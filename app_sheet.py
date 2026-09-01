@@ -27,11 +27,13 @@ def _get(svc, rng):
 
 def fetch_all():
     """回傳 (students_raw, classes_raw, payments_raw) 三個含表頭的二維陣列。"""
+    # 開放範圍（不寫死列數）：撈全部歷史，Sheets 只回有資料的列。
+    # 寫死上限會在資料成長後把最新月份(附在最底部)截掉、靜默少算。
     svc = _service()
     return (
-        _get(svc, "Students!A1:I1000"),
-        _get(svc, "Classes!A1:E1300"),
-        _get(svc, "Payments!A1:I1000"),
+        _get(svc, "Students!A:I"),
+        _get(svc, "Classes!A:E"),
+        _get(svc, "Payments!A:I"),
     )
 
 

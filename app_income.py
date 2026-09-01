@@ -13,9 +13,13 @@ def parse_rows(raw):
     out = []
     for r in raw[1:]:
         d = {header[i]: (r[i] if i < len(r) else "") for i in range(len(header))}
-        for k in ("total_amount", "period_sessions", "paid_amount"):
-            v = str(d.get(k, "")).strip()
-            d[k] = int(v) if v.lstrip("-").isdigit() else 0
+        # 金額/堂數容錯：Sheets 可能回傳格式化字串（千分位、小數），去逗號後用 float→int
+        for k in ("total_amount", "period_sessions"):
+            s = str(d.get(k, "")).replace(",", "").strip()
+            try:
+                d[k] = int(float(s))
+            except (ValueError, TypeError):
+                d[k] = 0
         out.append(d)
     return out
 
@@ -84,11 +88,13 @@ def count_sessions(rows, venue, year, month, id2name, skip_names=frozenset()):
     return n
 
 
-def build_message(year, month, roulie, wushi, r_sessions, w_sessions):
-    """組月報 LINE 訊息文字；回 (msg, warnings)。"""
+def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved=0):
+    """組月報 LINE 訊息文字；回 (msg, warnings)。unresolved＝對不到學員名的收費筆數。"""
     warnings = []
     if roulie["total"] == 0 and wushi["gross"] == 0:
         warnings.append("柔力＋武士皆讀到 0，App 讀取可能失敗或該月無資料")
+    if unresolved:
+        warnings.append(f"{unresolved} 筆收費對不到學員名（顯示為 ?），收入歸屬／武士排除可能有誤")
 
     single_detail = "、".join(f"{n} {c}×{fee}" for n, c, fee, _ in roulie["single"])
     pkg_detail = "、".join(f"{n} {amt:,}" for n, amt, _ in roulie["package"])

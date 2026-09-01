@@ -18,6 +18,17 @@ def test_parse_rows_maps_header():
     assert rows[0]["student_id"] == "s1"
 
 
+def test_parse_rows_handles_formatted_numbers():
+    # 千分位、小數、空值都要容錯，不能靜默變 0
+    raw = [HEADER,
+           ["p1", "s1", "柔力", "2026-08-01", "套餐", "8,000", "6", "0"],
+           ["p2", "s2", "柔力", "2026-08-02", "單次", "700.0", "1", ""]]
+    rows = parse_rows(raw)
+    assert rows[0]["total_amount"] == 8000
+    assert rows[0]["period_sessions"] == 6
+    assert rows[1]["total_amount"] == 700
+
+
 def test_rows_for_month_filters_venue_and_month():
     raw = [HEADER,
            ["p1", "s1", "柔力", "2026-08-01", "單次", "700", "1", "700"],
@@ -89,6 +100,14 @@ def test_build_message_has_sections_and_totals():
     assert "本月收入：$67,362" in msg
     assert "柔力：88 堂" in msg and "武士：100 堂" in msg
     assert warnings == []
+
+
+def test_build_message_warns_on_unresolved():
+    roulie = {"single": [("?abcd1234", 1, 700, 700)], "package": [],
+              "single_total": 700, "package_total": 0, "total": 700}
+    wushi = {"gross": 1000, "income": 600}
+    msg, warnings = build_message(2026, 8, roulie, wushi, 1, 1, unresolved=2)
+    assert any("對不到學員" in w for w in warnings)
 
 
 def test_build_message_zero_warns():

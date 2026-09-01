@@ -37,16 +37,20 @@ def main():
     payments = parse_rows(payments_raw)
     classes = parse_rows(classes_raw)
 
-    roulie = summarize_roulie(rows_for_month(payments, "柔力", year, month), id2name)
-    wushi = summarize_wushi(rows_for_month(payments, "武士", year, month), id2name)
+    r_rows = rows_for_month(payments, "柔力", year, month)
+    w_rows = rows_for_month(payments, "武士", year, month)
+    roulie = summarize_roulie(r_rows, id2name)
+    wushi = summarize_wushi(w_rows, id2name)
     # 堂數顯示不排除任何人（olan 2026-09-01 決定）
     r_sessions = count_sessions(classes, "柔力", year, month, id2name)
     w_sessions = count_sessions(classes, "武士", year, month, id2name)
+    # 自檢：本月收費有幾筆對不到學員名（可能是打錯字/新學員未建檔）
+    unresolved = sum(1 for r in r_rows + w_rows if r["student_id"] not in id2name)
 
-    msg, _ = build_message(year, month, roulie, wushi, r_sessions, w_sessions)
+    msg, _ = build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved)
     print(msg)
 
-    requests.post(
+    resp = requests.post(
         "https://api.line.me/v2/bot/message/push",
         headers={
             "Authorization": f"Bearer {os.environ['LINE_CHANNEL_ACCESS_TOKEN']}",
@@ -58,6 +62,7 @@ def main():
         },
         timeout=10,
     )
+    print("LINE push:", resp.status_code)
 
 
 if __name__ == "__main__":
