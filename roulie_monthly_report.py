@@ -110,9 +110,13 @@ def fetch_roulie_gcal(year, month):
     return events
 
 def main():
-    # 排程固定在「當月最後一天 23:00 台灣時間」觸發，所以報的就是台灣時區的本月
-    now_tw = datetime.now(TZ)
-    year, month = now_tw.year, now_tw.month
+    # 可用 MONTH_OVERRIDE=YYYY-MM 指定月份（手動補發用）；否則排程固定月底跑，報台灣時區本月
+    override = os.environ.get("MONTH_OVERRIDE", "").strip()
+    if override:
+        year, month = int(override[:4]), int(override[5:7])
+    else:
+        now_tw = datetime.now(TZ)
+        year, month = now_tw.year, now_tw.month
     print(f"計算 {year}/{month}...")
 
     w_sessions, w_gross, w_hours, w_defaults = fetch_wushi(year, month)

@@ -10,6 +10,10 @@ on:
         description: "強制發送（略過月底判斷，供手動測試）"
         type: boolean
         default: false
+      month:
+        description: "指定月份補發，格式 YYYY-MM（留空＝依排程當月）；填了就一定發"
+        type: string
+        default: ""
 
 jobs:
   check:
@@ -19,7 +23,7 @@ jobs:
     steps:
       - id: date
         run: |
-          if [ "${{ inputs.force }}" = "true" ] || [ "$(date -d tomorrow +%d)" = "01" ]; then
+          if [ "${{ inputs.force }}" = "true" ] || [ -n "${{ inputs.month }}" ] || [ "$(date -d tomorrow +%d)" = "01" ]; then
             echo "run=true" >> $GITHUB_OUTPUT
           else
             echo "run=false" >> $GITHUB_OUTPUT
@@ -43,4 +47,5 @@ jobs:
           GOOGLE_CLIENT_SECRET:      ${{ secrets.GOOGLE_CLIENT_SECRET }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID:              ${{ secrets.LINE_USER_ID }}
+          MONTH_OVERRIDE:            ${{ inputs.month }}
         run: python roulie_monthly_report.py
