@@ -1,11 +1,33 @@
 name: 收入月報（武士+柔力）
 
 on:
-  # 每月 1 日 22:00 台灣時間，由 cron-job.org 外部觸發（GitHub 內建排程不可靠，2026-08-02 移除）
+  # 每月最後一天 23:00 台灣時間，由 cron-job.org 外部觸發（設每月 28-31 日 23:00，check job 判斷明天是不是 1 號，只有真月底才發）
+  # 2026-09-01 由「1 日 22:00」改為月底 23:00，與武士月業績報告同日發（22:00 武士、23:00 收入）
+  # 註：cron-job.org 走 workflow_dispatch，無法靠 event 名稱分辨，故一律用日期判斷；要手動測試按 force=true
   workflow_dispatch:
+    inputs:
+      force:
+        description: "強制發送（略過月底判斷，供手動測試）"
+        type: boolean
+        default: false
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.date.outputs.run }}
+    steps:
+      - id: date
+        run: |
+          if [ "${{ inputs.force }}" = "true" ] || [ "$(date -d tomorrow +%d)" = "01" ]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
   send-report:
+    needs: check
+    if: needs.check.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

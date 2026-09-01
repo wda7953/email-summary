@@ -1,5 +1,5 @@
 import os, re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 import caldav, pytz, requests
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
@@ -110,9 +110,9 @@ def fetch_roulie_gcal(year, month):
     return events
 
 def main():
-    today = date.today()
-    last = today.replace(day=1) - timedelta(days=1)
-    year, month = last.year, last.month
+    # 排程固定在「當月最後一天 23:00 台灣時間」觸發，所以報的就是台灣時區的本月
+    now_tw = datetime.now(TZ)
+    year, month = now_tw.year, now_tw.month
     print(f"計算 {year}/{month}...")
 
     w_sessions, w_gross, w_hours, w_defaults = fetch_wushi(year, month)
