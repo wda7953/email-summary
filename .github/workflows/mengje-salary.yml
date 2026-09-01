@@ -3,6 +3,11 @@ name: 孟潔薪資通知
 on:
   # 每月 4 日 09:00 台灣時間，由 cron-job.org 外部觸發（GitHub 內建排程不可靠，2026-08-02 移除；2日→4日 2026-08-02 改）
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "測試模式：只印訊息不發 LINE（驗證一對一堂數用）"
+        type: boolean
+        default: false
 
 jobs:
   send-salary:
@@ -21,4 +26,5 @@ jobs:
           MENGJE_SHEET_ID:      ${{ secrets.MENGJE_SHEET_ID }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID:         ${{ secrets.LINE_USER_ID }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
         run: python mengje_salary_notify.py

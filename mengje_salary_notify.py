@@ -19,6 +19,13 @@ last_month_date = today.replace(day=1) - __import__("datetime").timedelta(days=1
 month = last_month_date.month
 year  = last_month_date.year
 
+# ── 第二部分：孟潔跟 olan 上一對一課，要從薪資扣掉「當月堂數 × 單價」──
+# 堂數來源＝學員 App 的 Google Sheet（孟潔在 App 裡就是一位學員，名字＝「孟潔」，她名下所有上課記錄都是這門一對一）。
+# Sheet 分頁：Students['id','name',...]／Classes['id','student_id','date','venue','type','content',...]（見 student-app-gas/程式碼.js）。
+STUDENT_APP_SHEET_ID = os.environ.get("STUDENT_APP_SHEET_ID", "1MxqLAMo0n-RowJ6a8kenA4eOp9isZYue7W1beZNTWDc")
+MENGJE_STUDENT_NAME  = "孟潔"   # 孟潔在學員 App 裡的名字
+ONE_ON_ONE_RATE      = 800     # 一對一單價（元／堂）
+
 # 一對一課，體驗不計入收入
 sheets_svc = build("sheets", "v4", credentials=creds)
 sheet_name = f"{month}月"
@@ -69,8 +76,61 @@ total_paid = cell_total(sales_row) if sales_row else 0
 mengje_pay    = total_gross * 0.65
 studio_income = total_gross * 0.35
 
+# ── 第二部分：扣掉孟潔當月跟 olan 上的一對一堂數 × 單價 ──
+# 只扣「實際給孟潔的錢」，不動工作室收入(柔力)——這筆是孟潔付給 olan 個人的課費。
+one_on_one_sessions = 0            # 孟潔當月跟 olan 上的堂數
+one_on_one_error    = None        # 讀 App 失敗時記原因，發警告不無聲當 0
+try:
+    def _col(hdr, *names):
+        """依欄名找欄位索引（不寫死位置，欄序改了也不會抓錯）。"""
+        for i, c in enumerate(hdr):
+            if str(c).strip() in names:
+                return i
+        return None
+    # 1) Students 分頁：用名字找孟潔的 student_id
+    stu = sheets_svc.spreadsheets().values().get(
+        spreadsheetId=STUDENT_APP_SHEET_ID, range="Students!A1:Z2000",
+    ).execute().get("values", [])
+    if not stu:
+        raise ValueError("Students 分頁讀不到資料")
+    s_hdr = stu[0]
+    s_id_col, s_name_col = _col(s_hdr, "id"), _col(s_hdr, "name")
+    if s_id_col is None or s_name_col is None:
+        raise ValueError("Students 分頁找不到 id／name 欄")
+    mengje_id = next(
+        (r[s_id_col] for r in stu[1:]
+         if len(r) > max(s_id_col, s_name_col) and str(r[s_name_col]).strip() == MENGJE_STUDENT_NAME),
+        None,
+    )
+    if not mengje_id:
+        raise ValueError(f"學員 App 找不到名為「{MENGJE_STUDENT_NAME}」的學員")
+    # 2) Classes 分頁：數孟潔名下、日期落在結算月的上課記錄筆數
+    cls = sheets_svc.spreadsheets().values().get(
+        spreadsheetId=STUDENT_APP_SHEET_ID, range="Classes!A1:Z5000",
+    ).execute().get("values", [])
+    if not cls:
+        raise ValueError("Classes 分頁讀不到資料")
+    c_hdr = cls[0]
+    c_sid_col, c_date_col = _col(c_hdr, "student_id"), _col(c_hdr, "date")
+    if c_sid_col is None or c_date_col is None:
+        raise ValueError("Classes 分頁找不到 student_id／date 欄")
+    ym = f"{year}-{month:02d}"     # 日期字串前 7 碼＝年月（App 存 YYYY-MM-DD 或 ISO，切前綴比對即可）
+    for r in cls[1:]:
+        if len(r) <= max(c_sid_col, c_date_col):
+            continue
+        if str(r[c_sid_col]).strip() == str(mengje_id).strip() and str(r[c_date_col])[:7] == ym:
+            one_on_one_sessions += 1
+except Exception as e:
+    one_on_one_error = str(e)
+
+one_on_one_deduct = one_on_one_sessions * ONE_ON_ONE_RATE
+mengje_actual     = mengje_pay - one_on_one_deduct   # 實際給孟潔的錢
+
 # ── 複查自檢：算完發出前驗證幾條規則，不通過就在訊息開頭標警告 ──
 warnings = []
+# 一對一堂數讀取失敗＝可能少扣或多付，一定要人工確認別無聲
+if one_on_one_error:
+    warnings.append(f"讀學員 App 一對一堂數失敗（{one_on_one_error}）→ 本月未扣一對一課費，請人工確認")
 price_rows = [r for r in rows if price_of(r) is not None]
 # 1) 完全沒偵測到單價列（分頁空白或格式改變 → 會整個算成 0）
 if not price_rows:
@@ -124,6 +184,12 @@ if year != 2026:
 msg = f"孟潔 {year}/{month:02d} 薪資結算"
 msg += f"\n收款：${total_paid:,}"
 msg += f"\n應付薪資：${mengje_pay:,.0f}"
+# 第二部分：扣掉跟 olan 上的一對一課費，補一行淨額（工作室收入不受影響）
+if one_on_one_sessions > 0:
+    msg += f"\n　扣一對一課費：-${one_on_one_deduct:,}（{one_on_one_sessions}堂×{ONE_ON_ONE_RATE}）"
+    msg += f"\n　實際給孟潔：${mengje_actual:,.0f}"
+elif one_on_one_error is None:
+    msg += f"\n　一對一課費：$0（本月無跟olan上課）"
 msg += f"\n工作室收入：${studio_income:,.0f}"
 # 未實現只看「開始執行到結算」的累計（預收款常跨月上完，當月未實現無意義）
 msg += f"\n📊 累計未實現(預收餘額)：${cum_unrealized:,}"
