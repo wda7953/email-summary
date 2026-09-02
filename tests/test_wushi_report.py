@@ -50,3 +50,14 @@ def test_selfcheck_invariant_across_prices():
     assert "當週總執行堂數：5" in rep
     assert _listed_total(rep) == 5
     assert "⚠️自檢異常" not in rep
+
+
+def test_fetch_uses_expand_not_date_search():
+    """防呆：抓行事曆必須用 search(expand=True) 展開重複性事件。
+
+    2026-09-02 曾因用 date_search（不展開）漏算每週固定學員，堂數嚴重低估。
+    禁止退回 date_search，否則同一個 bug 會復發。
+    """
+    src = open(w.__file__, encoding="utf-8").read()
+    assert "expand=True" in src, "fetch_events 必須用 search(expand=True) 展開重複性事件"
+    assert "date_search" not in src, "禁止用 date_search（不展開重複性事件，會漏算固定學員）"
