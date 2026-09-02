@@ -4,10 +4,6 @@ from datetime import date, timedelta, datetime
 import caldav, pytz, requests
 
 TZ = pytz.timezone("Asia/Taipei")
-ICLOUD_USER = os.environ["ICLOUD_USERNAME"]
-ICLOUD_PASS = os.environ["ICLOUD_PASSWORD"]
-LINE_TOKEN  = os.environ["LINE_CHANNEL_ACCESS_TOKEN"]
-LINE_UID    = os.environ["LINE_USER_ID"]
 
 SKIP_RE = re.compile(r"^(打掃|[xX]|.*另計|黃誼淇|鳳甲國中)")
 TIERS   = [1600, 1300, 1200, 1100, 1000, 990, 900, 500]
@@ -15,8 +11,8 @@ TIERS   = [1600, 1300, 1200, 1100, 1000, 990, 900, 500]
 def send_line(msg):
     requests.post(
         "https://api.line.me/v2/bot/message/push",
-        headers={"Authorization": f"Bearer {LINE_TOKEN}", "Content-Type": "application/json"},
-        json={"to": LINE_UID, "messages": [{"type": "text", "text": msg}]},
+        headers={"Authorization": f"Bearer {os.environ['LINE_CHANNEL_ACCESS_TOKEN']}", "Content-Type": "application/json"},
+        json={"to": os.environ["LINE_USER_ID"], "messages": [{"type": "text", "text": msg}]},
         timeout=10,
     )
 
@@ -29,7 +25,9 @@ def parse_event(summary, ev_date):
     return {"date": ev_date, "name": name, "price": price, "receipt_amt": receipt} if name else None
 
 def fetch_events(year, month):
-    client  = caldav.DAVClient(url="https://caldav.icloud.com", username=ICLOUD_USER, password=ICLOUD_PASS)
+    client  = caldav.DAVClient(url="https://caldav.icloud.com",
+                               username=os.environ["ICLOUD_USERNAME"],
+                               password=os.environ["ICLOUD_PASSWORD"])
     wushi   = next((c for c in client.principal().calendars() if "武士" in str(c.get_display_name())), None)
     if not wushi: raise ValueError("找不到武士行事曆")
     next_m  = date(year + (month // 12), month % 12 + 1, 1)
@@ -64,7 +62,7 @@ def format_report(month, ws, we, sessions, receipts):
     renewal_amt   = sum(r["receipt_amt"] for r in receipts)
     renewal_names = [r["name"] for r in receipts]
     tier_names    = {t: [] for t in TIERS}
-    other_names   = {}  # 非標準價位（如 1111 這種實際課單價）→ 名字，一樣要列出來，堂數才對得上名單
+    other_names   = {}  # 非標準價位（如活動價、1111 這種實際課單價）→ 名字，一樣要列出來，堂數才對得上名單
     for s in sessions:
         if s["price"] in tier_names:
             tier_names[s["price"]].append(s["name"])
@@ -76,27 +74,38 @@ def format_report(month, ws, we, sessions, receipts):
         f"當週總銷售金額：{renewal_amt:,}",
         f"當週總執行堂數：{len(sessions)}",
     ]
+    listed = 0  # 已列進名單的堂數，用來自檢
     for t in TIERS:
         nc  = Counter(tier_names[t])
         ns  = "  " + "、".join(f"{n} × {c}" if c > 1 else n for n, c in nc.items()) if nc else ""
         lines.append(f"{t}（{len(tier_names[t])}）{ns}")
+        listed += len(tier_names[t])
     # 非標準價位（不在固定清單裡的實際課單價）照常當一個價位列，堂數才對得上名單
     for p in sorted(other_names, reverse=True):
         nc = Counter(other_names[p])
         ns = "  " + "、".join(f"{n} × {c}" if c > 1 else n for n, c in nc.items())
         lines.append(f"{p}（{len(other_names[p])}）{ns}")
+        listed += len(other_names[p])
+    # 發前自檢：總堂數必須等於各價位列名單加總，否則有堂被吞掉，標 ⚠️ 提醒報表不可信
+    if listed != len(sessions):
+        lines.append(f"⚠️自檢異常：總堂數{len(sessions)}≠名單加總{listed}，有堂未列出，請通知維護")
     lines.append("體驗/成交：")
     lines.append(f"當週續約人數：{len(renewal_names)}（{'、'.join(renewal_names)}）" if renewal_names else "當週續約人數：0")
     return "\n".join(lines)
 
-today = date.today()
-year  = int(sys.argv[1]) if len(sys.argv) > 1 else today.year
-month = int(sys.argv[2]) if len(sys.argv) > 2 else today.month
-events = fetch_events(year, month)
-send_line(f"【{year}年{month}月武士業績回報】")
-for ws, we in week_ranges(year, month):
-    s = [e for e in events if ws <= e["date"] <= we]
-    r = [e for e in s if e["receipt_amt"] > 0]
-    send_line(format_report(month, ws, we, s, r))
-    print(f"已傳：{ws}–{we}")
-print("完成！")
+def main(year=None, month=None):
+    today = date.today()
+    year  = year or today.year
+    month = month or today.month
+    events = fetch_events(year, month)
+    send_line(f"【{year}年{month}月武士業績回報】")
+    for ws, we in week_ranges(year, month):
+        s = [e for e in events if ws <= e["date"] <= we]
+        r = [e for e in s if e["receipt_amt"] > 0]
+        send_line(format_report(month, ws, we, s, r))
+        print(f"已傳：{ws}–{we}")
+    print("完成！")
+
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    main(int(a[0]), int(a[1])) if len(a) >= 2 else main()
