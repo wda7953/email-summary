@@ -61,6 +61,19 @@ def test_prices_sorted_high_to_low_with_nonstandard_inline():
     assert order.index(1200) < order.index(1111) < order.index(1100)
 
 
+def test_show_names_false_strips_all_names():
+    """無名字版：價位列與續約人數都不能出現任何名字，但數量要對。"""
+    sessions = [_session("小叔叔", 1300), _session("郁雯姊", 1111)]
+    receipts = [dict(_session("小叔叔", 1300), receipt_amt=1300)]
+    rep = w.format_report(8, date(2026, 8, 3), date(2026, 8, 9), sessions, receipts, show_names=False)
+    assert "小叔叔" not in rep and "郁雯姊" not in rep
+    assert "1300（1）" in rep and "1111（1）" in rep       # 數量仍在
+    assert "當週續約人數：1" in rep and "（小叔叔）" not in rep
+    # 含名字版對照：名字要在
+    rep2 = w.format_report(8, date(2026, 8, 3), date(2026, 8, 9), sessions, receipts, show_names=True)
+    assert "小叔叔" in rep2 and "郁雯姊" in rep2
+
+
 def test_fetch_uses_expand_not_date_search():
     """防呆：抓行事曆必須用 search(expand=True) 展開重複性事件。
 
