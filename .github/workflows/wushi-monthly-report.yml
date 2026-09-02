@@ -3,7 +3,16 @@ name: 武士月業績報告
 on:
   schedule:
     - cron: "0 14 28-31 * *"  # 每月 28-31 日 22:00 台灣時間，腳本內確認是否月底
-  workflow_dispatch:           # 可手動觸發
+  workflow_dispatch:           # 可手動觸發（補發指定月份）
+    inputs:
+      year:
+        description: "補發年份（留空=本月）"
+        required: false
+        default: ""
+      month:
+        description: "補發月份 1-12（留空=本月）"
+        required: false
+        default: ""
 
 jobs:
   check:
@@ -35,4 +44,5 @@ jobs:
           ICLOUD_PASSWORD:           ${{ secrets.ICLOUD_PASSWORD }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID:              ${{ secrets.LINE_USER_ID }}
-        run: python .github/scripts/wushi_monthly_report.py
+        # 有帶 year/month 就補發指定月份；留空則不帶參數，腳本自動用本月
+        run: python .github/scripts/wushi_monthly_report.py ${{ github.event.inputs.year }} ${{ github.event.inputs.month }}
