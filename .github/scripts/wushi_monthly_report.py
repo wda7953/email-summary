@@ -61,13 +61,10 @@ def week_ranges(year, month):
 def format_report(month, ws, we, sessions, receipts):
     renewal_amt   = sum(r["receipt_amt"] for r in receipts)
     renewal_names = [r["name"] for r in receipts]
-    tier_names    = {t: [] for t in TIERS}
-    other_names   = {}  # 非標準價位（如活動價、1111 這種實際課單價）→ 名字，一樣要列出來，堂數才對得上名單
+    # 固定價位先鋪底（即使 0 堂也要顯示）；非標準價位（如活動價、1111）也放進來，最後一起由高到低排
+    price_names = {t: [] for t in TIERS}
     for s in sessions:
-        if s["price"] in tier_names:
-            tier_names[s["price"]].append(s["name"])
-        else:
-            other_names.setdefault(s["price"], []).append(s["name"])
+        price_names.setdefault(s["price"], []).append(s["name"])
     lines = [
         f"{month}/{ws.day}-{month}/{we.day} Olan週業績回報",
         f"當週續約金額：{renewal_amt:,}",
@@ -75,17 +72,11 @@ def format_report(month, ws, we, sessions, receipts):
         f"當週總執行堂數：{len(sessions)}",
     ]
     listed = 0  # 已列進名單的堂數，用來自檢
-    for t in TIERS:
-        nc  = Counter(tier_names[t])
-        ns  = "  " + "、".join(f"{n} × {c}" if c > 1 else n for n, c in nc.items()) if nc else ""
-        lines.append(f"{t}（{len(tier_names[t])}）{ns}")
-        listed += len(tier_names[t])
-    # 非標準價位（不在固定清單裡的實際課單價）照常當一個價位列，堂數才對得上名單
-    for p in sorted(other_names, reverse=True):
-        nc = Counter(other_names[p])
-        ns = "  " + "、".join(f"{n} × {c}" if c > 1 else n for n, c in nc.items())
-        lines.append(f"{p}（{len(other_names[p])}）{ns}")
-        listed += len(other_names[p])
+    for p in sorted(price_names, reverse=True):  # 全部價位一起由高到低排（非標準價依數值插到正確位置）
+        nc = Counter(price_names[p])
+        ns = "  " + "、".join(f"{n} × {c}" if c > 1 else n for n, c in nc.items()) if nc else ""
+        lines.append(f"{p}（{len(price_names[p])}）{ns}")
+        listed += len(price_names[p])
     # 發前自檢：總堂數必須等於各價位列名單加總，否則有堂被吞掉，標 ⚠️ 提醒報表不可信
     if listed != len(sessions):
         lines.append(f"⚠️自檢異常：總堂數{len(sessions)}≠名單加總{listed}，有堂未列出，請通知維護")

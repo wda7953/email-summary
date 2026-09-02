@@ -52,6 +52,15 @@ def test_selfcheck_invariant_across_prices():
     assert "⚠️自檢異常" not in rep
 
 
+def test_prices_sorted_high_to_low_with_nonstandard_inline():
+    """價位列全部由高到低排，非標準價(1111)要插在 1200 與 1100 之間，不落在最後。"""
+    sessions = [_session("A", 1200), _session("B", 1111), _session("C", 1100)]
+    rep = w.format_report(8, date(2026, 8, 3), date(2026, 8, 9), sessions, [])
+    order = [int(m) for m in re.findall(r"^(\d+)（", rep, re.M)]
+    assert order == sorted(order, reverse=True), f"價位未由高到低排：{order}"
+    assert order.index(1200) < order.index(1111) < order.index(1100)
+
+
 def test_fetch_uses_expand_not_date_search():
     """防呆：抓行事曆必須用 search(expand=True) 展開重複性事件。
 
