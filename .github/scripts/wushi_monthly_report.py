@@ -64,8 +64,12 @@ def format_report(month, ws, we, sessions, receipts):
     renewal_amt   = sum(r["receipt_amt"] for r in receipts)
     renewal_names = [r["name"] for r in receipts]
     tier_names    = {t: [] for t in TIERS}
+    other_names   = {}  # 非標準價位（如 1111 這種實際課單價）→ 名字，一樣要列出來，堂數才對得上名單
     for s in sessions:
-        if s["price"] in tier_names: tier_names[s["price"]].append(s["name"])
+        if s["price"] in tier_names:
+            tier_names[s["price"]].append(s["name"])
+        else:
+            other_names.setdefault(s["price"], []).append(s["name"])
     lines = [
         f"{month}/{ws.day}-{month}/{we.day} Olan週業績回報",
         f"當週續約金額：{renewal_amt:,}",
@@ -76,6 +80,11 @@ def format_report(month, ws, we, sessions, receipts):
         nc  = Counter(tier_names[t])
         ns  = "  " + "、".join(f"{n} × {c}" if c > 1 else n for n, c in nc.items()) if nc else ""
         lines.append(f"{t}（{len(tier_names[t])}）{ns}")
+    # 非標準價位（不在固定清單裡的實際課單價）照常當一個價位列，堂數才對得上名單
+    for p in sorted(other_names, reverse=True):
+        nc = Counter(other_names[p])
+        ns = "  " + "、".join(f"{n} × {c}" if c > 1 else n for n, c in nc.items())
+        lines.append(f"{p}（{len(other_names[p])}）{ns}")
     lines.append("體驗/成交：")
     lines.append(f"當週續約人數：{len(renewal_names)}（{'、'.join(renewal_names)}）" if renewal_names else "當週續約人數：0")
     return "\n".join(lines)
