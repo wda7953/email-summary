@@ -44,3 +44,9 @@ def id2name_from(students_raw):
         if len(r) >= 2:
             m[r[0]] = r[1]
     return m
+
+
+def fetch_students():
+    """只讀 Students 分頁（含表頭）的二維陣列。"""
+    svc = _service()
+    return _get(svc, "Students!A:I")
