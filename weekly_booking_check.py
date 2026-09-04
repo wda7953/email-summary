@@ -1,0 +1,66 @@
+"""每週排課核對 orchestrator：讀名單＋行事曆 → 比對 → 發 LINE。
+
+視窗＝執行當天起 8 天（含當天）；可用 CHECK_START=YYYY-MM-DD 覆蓋（測試/校準）。
+"""
+import json
+import os
+from datetime import datetime, timedelta
+
+import pytz
+import requests
+
+from app_sheet import fetch_students
+from booking_calendars import fetch_calendar_events
+from booking_check import active_students, extract_name, match, self_check, build_message
+
+TZ = pytz.timezone("Asia/Taipei")
+
+
+def window():
+    ov = os.environ.get("CHECK_START", "").strip()
+    if ov:
+        start = TZ.localize(datetime(int(ov[:4]), int(ov[5:7]), int(ov[8:10])))
+    else:
+        now = datetime.now(TZ)
+        start = TZ.localize(datetime(now.year, now.month, now.day))
+    return start, start + timedelta(days=8)   # end 不含當日 → 涵蓋含當天共 8 天
+
+
+def load_aliases():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "booking_aliases.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+
+def send_line(msg):
+    resp = requests.post(
+        "https://api.line.me/v2/bot/message/push",
+        headers={"Authorization": f"Bearer {os.environ['LINE_CHANNEL_ACCESS_TOKEN']}",
+                 "Content-Type": "application/json"},
+        json={"to": os.environ["LINE_USER_ID"], "messages": [{"type": "text", "text": msg}]},
+        timeout=10,
+    )
+    print("LINE push:", resp.status_code)
+
+
+def main():
+    start, end = window()
+    print(f"核對視窗：{start.date()} ~ {(end - timedelta(days=1)).date()}")
+
+    active = active_students(fetch_students())
+    raw_events = fetch_calendar_events(start, end)
+    calendar_names = [nm for (summary, kind) in raw_events
+                      if (nm := extract_name(summary, kind))]
+
+    warnings = self_check(len(active), len(raw_events))
+    result = match(active, calendar_names, load_aliases())
+    msg = build_message(start, result, warnings)
+    print(msg)
+    send_line(msg)
+
+
+if __name__ == "__main__":
+    main()
