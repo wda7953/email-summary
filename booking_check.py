@@ -51,7 +51,7 @@ def extract_name(summary, kind):
 
 
 def _norm(s):
-    return re.sub(r"\s+", "", (s or "")).strip()
+    return re.sub(r"\s+", "", (s or ""))
 
 
 def _lcs_len(a, b):
@@ -84,7 +84,9 @@ def suggest_alias(cal_name, app_names):
 def match(active, calendar_names, aliases):
     """active: [{'name','venue'}]；calendar_names: 已抽名的 list[str]；
     aliases: {行事曆暱稱: App全名}，值為空字串＝已知忽略（排除三人/已結案/非學員）。
-    回 {'missing','unmatched','suggestions'}。"""
+    回 {'missing','unmatched','suggestions'}。
+    已知限制：比對用正規化後的名字，若兩位在線學員全名完全相同會被當成同一位
+    （行事曆標題沒有學員 id 可分辨）——暫可接受，發生再處理。"""
     app_names = {_norm(s["name"]) for s in active}
     alias_norm = {_norm(k): _norm(v) for k, v in aliases.items()}
 
@@ -112,13 +114,17 @@ def format_range(start):
     return f"{start.month}/{start.day}–{end.month}/{end.day}"
 
 
-def self_check(active_count, event_count):
-    """發前自檢：名單或事件讀到 0 → 回警告清單（有警告就不發漏排）。"""
+def self_check(active_count, raw_event_count, name_count):
+    """發前自檢：名單/事件讀到 0，或事件都抓不出名字（如全取消／假期週被 extract_name
+    濾成空字串，raw_event_count>0 但 name_count==0）→ 回警告清單（有警告就不發漏排，
+    避免「全部濾空」被誤判成「在線學員全員漏排」）。"""
     w = []
     if active_count == 0:
         w.append("學員名單讀到 0 人（App/Sheet 讀取可能失敗）")
-    if event_count == 0:
+    if raw_event_count == 0:
         w.append("行事曆讀到 0 筆事件（iCloud/GCal 憑證可能失效）")
+    elif name_count == 0:
+        w.append("行事曆有事件但抓不到任何學員名，解析可能有問題")
     return w
 
 

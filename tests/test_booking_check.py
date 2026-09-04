@@ -99,6 +99,7 @@ def test_build_message_warnings_override():
 
 
 def test_self_check():
-    assert b.self_check(0, 5) == ["學員名單讀到 0 人（App/Sheet 讀取可能失敗）"]
-    assert b.self_check(30, 0) == ["行事曆讀到 0 筆事件（iCloud/GCal 憑證可能失效）"]
-    assert b.self_check(30, 5) == []
+    assert b.self_check(0, 5, 3) == ["學員名單讀到 0 人（App/Sheet 讀取可能失敗）"]
+    assert b.self_check(30, 0, 0) == ["行事曆讀到 0 筆事件（iCloud/GCal 憑證可能失效）"]
+    assert b.self_check(30, 5, 0) == ["行事曆有事件但抓不到任何學員名，解析可能有問題"]
+    assert b.self_check(30, 5, 3) == []

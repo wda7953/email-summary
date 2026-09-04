@@ -50,12 +50,19 @@ def main():
     start, end = window()
     print(f"核對視窗：{start.date()} ~ {(end - timedelta(days=1)).date()}")
 
-    active = active_students(fetch_students())
-    raw_events = fetch_calendar_events(start, end)
+    try:
+        active = active_students(fetch_students())
+        raw_events = fetch_calendar_events(start, end)
+    except Exception as ex:
+        # 讀名單／行事曆失敗（憑證失效、行事曆改名…）也要發得出 LINE，
+        # 不然就是「沒收到通知」而不是「收到失敗通知」——後者才有用。
+        send_line(f"⚠️ 排課核對執行失敗，請查 GitHub Actions log：\n{ex}")
+        raise
+
     calendar_names = [nm for (summary, kind) in raw_events
                       if (nm := extract_name(summary, kind))]
 
-    warnings = self_check(len(active), len(raw_events))
+    warnings = self_check(len(active), len(raw_events), len(calendar_names))
     result = match(active, calendar_names, load_aliases())
     msg = build_message(start, result, warnings)
     print(msg)

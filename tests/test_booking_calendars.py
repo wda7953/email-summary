@@ -13,3 +13,16 @@ def test_uses_expand_not_date_search():
 
 def test_has_gcal_id():
     assert c.GCAL_ID.endswith("@group.calendar.google.com")
+
+
+def test_is_roulie_studio_keeps_only_roulie_titles():
+    assert c.is_roulie_studio("靜（柔力）900") is True
+    assert c.is_roulie_studio("打掃") is False
+    assert c.is_roulie_studio("陳麗卿 1200") is False
+
+
+def test_is_roulie_gcal_keeps_roulie_or_olan_case_insensitive():
+    assert c.is_roulie_gcal("小丘（柔力）900") is True
+    assert c.is_roulie_gcal("Olan 個人時段") is True
+    assert c.is_roulie_gcal("OLAN") is True
+    assert c.is_roulie_gcal("陳麗卿 1200") is False

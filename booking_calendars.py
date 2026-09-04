@@ -63,13 +63,23 @@ def _gcal_summaries(start, end):
     return out
 
 
+def is_roulie_studio(summary):
+    """iCloud「工作室」行事曆：只認 summary 含「柔力」的事件為柔力課。"""
+    return "柔力" in summary
+
+
+def is_roulie_gcal(summary):
+    """柔力 Google Calendar：只認含「柔力」或「olan」（不分大小寫）的事件為柔力課。"""
+    return ("柔力" in summary) or bool(re.search(r"olan", summary, re.I))
+
+
 def fetch_calendar_events(start, end):
     """回傳 [(summary, kind)]；start/end 為 tz-aware datetime。"""
     events = [(s, "wushi") for s in _icloud_summaries("武士", start, end)]
     for s in _icloud_summaries("工作室", start, end):
-        if "柔力" in s:
+        if is_roulie_studio(s):
             events.append((s, "roulie"))
     for s in _gcal_summaries(start, end):
-        if "柔力" in s or re.search(r"olan", s, re.I):
+        if is_roulie_gcal(s):
             events.append((s, "roulie"))
     return events
