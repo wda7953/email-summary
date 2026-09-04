@@ -63,3 +63,42 @@ def test_match_unmatched_gets_suggestion():
 def test_suggest_alias_needs_two_common_chars():
     assert b.suggest_alias("麗卿姊", ["陳麗卿", "王小明"]) == "陳麗卿"
     assert b.suggest_alias("完全無關", ["陳麗卿"]) is None
+
+
+def test_format_range():
+    assert b.format_range(date(2026, 9, 5)) == "9/5–9/12"
+
+
+def test_build_message_missing_list():
+    res = {"missing": _active(("陳麗卿", "武士"), ("靜", "柔力")),
+           "unmatched": [], "suggestions": {}}
+    msg = b.build_message(date(2026, 9, 5), res, [])
+    assert "下週排課核對 9/5–9/12" in msg
+    assert "還沒排到（2 位）" in msg
+    assert "・陳麗卿（武士）" in msg and "・靜（柔力）" in msg
+
+
+def test_build_message_all_scheduled():
+    res = {"missing": [], "unmatched": [], "suggestions": {}}
+    msg = b.build_message(date(2026, 9, 5), res, [])
+    assert "✅ 下週在線學員都排到了" in msg
+
+
+def test_build_message_unmatched_block():
+    res = {"missing": [], "unmatched": ["小新媽"], "suggestions": {"小新媽": None}}
+    msg = b.build_message(date(2026, 9, 5), res, [])
+    assert "對不到 App（1 個" in msg
+    assert "「小新媽」→ 疑似 ?" in msg
+
+
+def test_build_message_warnings_override():
+    res = {"missing": _active(("陳麗卿", "武士")), "unmatched": [], "suggestions": {}}
+    msg = b.build_message(date(2026, 9, 5), res, ["行事曆讀到 0 筆事件（iCloud/GCal 憑證可能失效）"])
+    assert "讀取異常" in msg
+    assert "還沒排到" not in msg          # 有異常時不列漏排，避免誤報全員漏排
+
+
+def test_self_check():
+    assert b.self_check(0, 5) == ["學員名單讀到 0 人（App/Sheet 讀取可能失敗）"]
+    assert b.self_check(30, 0) == ["行事曆讀到 0 筆事件（iCloud/GCal 憑證可能失效）"]
+    assert b.self_check(30, 5) == []

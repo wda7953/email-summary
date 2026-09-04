@@ -104,3 +104,45 @@ def match(active, calendar_names, aliases):
     missing = [s for s in active if _norm(s["name"]) not in matched]
     suggestions = {cn: suggest_alias(cn, [s["name"] for s in active]) for cn in unmatched}
     return {"missing": missing, "unmatched": unmatched, "suggestions": suggestions}
+
+
+def format_range(start):
+    """start(date/datetime) → '9/5–9/12'（含當天共 8 天，末日＝start+7）。"""
+    end = start + timedelta(days=7)
+    return f"{start.month}/{start.day}–{end.month}/{end.day}"
+
+
+def self_check(active_count, event_count):
+    """發前自檢：名單或事件讀到 0 → 回警告清單（有警告就不發漏排）。"""
+    w = []
+    if active_count == 0:
+        w.append("學員名單讀到 0 人（App/Sheet 讀取可能失敗）")
+    if event_count == 0:
+        w.append("行事曆讀到 0 筆事件（iCloud/GCal 憑證可能失效）")
+    return w
+
+
+def build_message(start, result, warnings):
+    """組 LINE 訊息。warnings 非空時只報異常、不列漏排（避免誤報全員漏排）。"""
+    rng = format_range(start)
+    lines = [f"📅 下週排課核對 {rng}", ""]
+    if warnings:
+        lines.append("⚠️ 讀取異常，本次結果不可信：")
+        lines += [f"・{w}" for w in warnings]
+        return "\n".join(lines)
+
+    missing = result["missing"]
+    if not missing:
+        lines.append(f"✅ 下週在線學員都排到了（{rng}）")
+    else:
+        lines.append(f"⚠️ 還沒排到（{len(missing)} 位）：")
+        lines += [f"・{m['name']}（{m['venue'] or '?'}）" for m in missing]
+
+    unmatched = result["unmatched"]
+    if unmatched:
+        lines.append("")
+        lines.append(f"❓ 行事曆有、對不到 App（{len(unmatched)} 個，需確認別名）：")
+        for cn in unmatched:
+            sug = result["suggestions"].get(cn)
+            lines.append(f"・「{cn}」→ 疑似 {sug}" if sug else f"・「{cn}」→ 疑似 ?")
+    return "\n".join(lines)
