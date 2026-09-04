@@ -48,3 +48,59 @@ def extract_name(summary, kind):
     if not name or name.lower() == "olan":
         return ""
     return name
+
+
+def _norm(s):
+    return re.sub(r"\s+", "", (s or "")).strip()
+
+
+def _lcs_len(a, b):
+    """最長共同子字串長度（O(n*m) DP，名字短，足夠）。"""
+    if not a or not b:
+        return 0
+    prev = [0] * (len(b) + 1)
+    best = 0
+    for i in range(1, len(a) + 1):
+        cur = [0] * (len(b) + 1)
+        for j in range(1, len(b) + 1):
+            if a[i - 1] == b[j - 1]:
+                cur[j] = prev[j - 1] + 1
+                best = max(best, cur[j])
+        prev = cur
+    return best
+
+
+def suggest_alias(cal_name, app_names):
+    """替對不到的行事曆名字找最像的 App 全名（需≥2 共同字），找不到回 None。"""
+    a = _norm(cal_name)
+    best, best_len = None, 0
+    for name in app_names:
+        l = _lcs_len(a, _norm(name))
+        if l > best_len:
+            best, best_len = name, l
+    return best if best_len >= 2 else None
+
+
+def match(active, calendar_names, aliases):
+    """active: [{'name','venue'}]；calendar_names: 已抽名的 list[str]；
+    aliases: {行事曆暱稱: App全名}，值為空字串＝已知忽略（排除三人/已結案/非學員）。
+    回 {'missing','unmatched','suggestions'}。"""
+    app_names = {_norm(s["name"]) for s in active}
+    alias_norm = {_norm(k): _norm(v) for k, v in aliases.items()}
+
+    matched, unmatched = set(), []
+    for cn in calendar_names:
+        n = _norm(cn)
+        if n in app_names:
+            matched.add(n)
+        elif n in alias_norm:
+            tgt = alias_norm[n]
+            if tgt and tgt in app_names:
+                matched.add(tgt)
+            # tgt 為空、或指向非在線學員 → 已知，忽略（不進 unmatched）
+        else:
+            unmatched.append(cn)
+
+    missing = [s for s in active if _norm(s["name"]) not in matched]
+    suggestions = {cn: suggest_alias(cn, [s["name"] for s in active]) for cn in unmatched}
+    return {"missing": missing, "unmatched": unmatched, "suggestions": suggestions}

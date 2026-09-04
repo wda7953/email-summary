@@ -36,3 +36,30 @@ def test_extract_name_roulie():
     assert b.extract_name("小丘（柔力）900", "roulie") == "小丘"
     assert b.extract_name("Jess&Abby", "roulie") == "Jess&Abby"
     assert b.extract_name("olan 柔力", "roulie") == ""    # olan 個人時段不是學員
+
+
+def _active(*pairs):
+    return [{"name": n, "venue": v} for n, v in pairs]
+
+
+def test_match_exact_alias_and_ignore():
+    active = _active(("陳麗卿", "武士"), ("靜", "柔力"), ("小丘", "柔力"))
+    cal = ["陳麗卿", "麗卿姊", "阿明"]   # 完全相同 / 需別名 / 未知
+    aliases = {"麗卿姊": "陳麗卿", "阿明": ""}   # 空字串＝已知非在線/忽略
+    res = b.match(active, cal, aliases)
+    missing = [m["name"] for m in res["missing"]]
+    assert "陳麗卿" not in missing          # 完全相同命中
+    assert "靜" in missing and "小丘" in missing
+    assert res["unmatched"] == []           # 阿明被 aliases 標記忽略，不算 unmatched
+
+
+def test_match_unmatched_gets_suggestion():
+    active = _active(("陳麗卿", "武士"))
+    res = b.match(active, ["麗卿姊"], {})     # 沒別名 → 進 unmatched 且附建議
+    assert res["unmatched"] == ["麗卿姊"]
+    assert res["suggestions"]["麗卿姊"] == "陳麗卿"
+
+
+def test_suggest_alias_needs_two_common_chars():
+    assert b.suggest_alias("麗卿姊", ["陳麗卿", "王小明"]) == "陳麗卿"
+    assert b.suggest_alias("完全無關", ["陳麗卿"]) is None
