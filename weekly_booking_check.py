@@ -11,7 +11,9 @@ import requests
 
 from app_sheet import fetch_students
 from booking_calendars import fetch_calendar_events
-from booking_check import active_students, extract_name, match, self_check, build_message
+from booking_check import (
+    SKIP_STUDENTS, active_students, extract_name, match, self_check, build_message,
+)
 
 TZ = pytz.timezone("Asia/Taipei")
 
@@ -35,6 +37,17 @@ def load_aliases():
         return {}
 
 
+def load_skip():
+    """讀不用每週排的學員清單（booking_skip_students.json），資料化維護，不用改 code。
+    檔案不存在時退回 booking_check.SKIP_STUDENTS 當保底。"""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "booking_skip_students.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return set(json.load(f))
+    except FileNotFoundError:
+        return SKIP_STUDENTS
+
+
 def send_line(msg):
     resp = requests.post(
         "https://api.line.me/v2/bot/message/push",
@@ -51,7 +64,7 @@ def main():
     print(f"核對視窗：{start.date()} ~ {(end - timedelta(days=1)).date()}")
 
     try:
-        active = active_students(fetch_students())
+        active = active_students(fetch_students(), skip=load_skip())
         raw_events = fetch_calendar_events(start, end)
     except Exception as ex:
         # 讀名單／行事曆失敗（憑證失效、行事曆改名…）也要發得出 LINE，

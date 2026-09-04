@@ -14,3 +14,9 @@ def test_window_uses_check_start_override(monkeypatch):
     assert start.date() == date(2026, 9, 5)
     assert (end - start).days == 8
     assert (start + timedelta(days=7)).date() == date(2026, 9, 12)   # 顯示範圍末日（含當天共8天）
+
+
+def test_load_skip_reads_json_file():
+    skip = wbc.load_skip()
+    assert "小丘" in skip
+    assert "順哥" in skip

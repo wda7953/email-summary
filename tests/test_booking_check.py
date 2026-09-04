@@ -22,6 +22,8 @@ def test_active_students_filters_status_and_skip():
     names = [s["name"] for s in out]
     assert names == ["陳麗卿", "靜"]
     assert out[0]["venue"] == "武士" and out[1]["venue"] == "柔力"
+    assert out[0]["id"] == "1" and out[1]["id"] == "2"          # 帶出 id 供夥伴比對
+    assert out[0]["partner_id"] == ""                            # 沒給 partner_id 欄 → 空字串
 
 
 def test_extract_name_wushi():
@@ -39,7 +41,16 @@ def test_extract_name_roulie():
 
 
 def _active(*pairs):
-    return [{"name": n, "venue": v} for n, v in pairs]
+    """pairs: (name, venue) 或 (name, venue, id, partner_id)。"""
+    out = []
+    for p in pairs:
+        if len(p) == 2:
+            n, v = p
+            out.append({"name": n, "venue": v})
+        else:
+            n, v, sid, pid = p
+            out.append({"name": n, "venue": v, "id": sid, "partner_id": pid})
+    return out
 
 
 def test_match_exact_alias_and_ignore():
@@ -51,6 +62,24 @@ def test_match_exact_alias_and_ignore():
     assert "陳麗卿" not in missing          # 完全相同命中
     assert "靜" in missing and "小丘" in missing
     assert res["unmatched"] == []           # 阿明被 aliases 標記忽略，不算 unmatched
+
+
+def test_match_partner_scheduled_covers_both():
+    # A(靖宜先生, partner_id=2) 沒被排到，但夥伴 B(靖宜, id=2) 有排到 → A 不算漏排
+    active = _active(("靖宜先生", "武士", "1", "2"), ("靖宜", "柔力", "2", "1"))
+    res = b.match(active, ["靖宜"], {})
+    missing = [m["name"] for m in res["missing"]]
+    assert "靖宜先生" not in missing        # 夥伴覆蓋
+    assert "靖宜" not in missing            # 自己也有排到
+
+
+def test_match_no_partner_still_reports_missing():
+    # 沒有 partner_id 的舊行為不變：沒排到就是漏排
+    active = _active(("陳麗卿", "武士"), ("靜", "柔力"))
+    res = b.match(active, ["陳麗卿"], {})
+    missing = [m["name"] for m in res["missing"]]
+    assert "靜" in missing
+    assert "陳麗卿" not in missing
 
 
 def test_match_unmatched_gets_suggestion():

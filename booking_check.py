@@ -15,7 +15,8 @@ TITLE_NOISE = re.compile(r"^(打掃|[xX])")
 
 
 def active_students(students_raw, skip=SKIP_STUDENTS):
-    """Students 二維陣列（含表頭）→ [{'name','venue'}]，只留 status==active 且不在 skip。"""
+    """Students 二維陣列（含表頭）→ [{'name','venue','id','partner_id'}]，
+    只留 status==active 且不在 skip。id/partner_id 供夥伴比對用（見 match）。"""
     out = []
     if not students_raw:
         return out
@@ -30,7 +31,10 @@ def active_students(students_raw, skip=SKIP_STUDENTS):
         name, status, venue = col(r, "name"), col(r, "status"), col(r, "venue")
         if not name or status != "active" or name in skip:
             continue
-        out.append({"name": name, "venue": venue})
+        out.append({
+            "name": name, "venue": venue,
+            "id": col(r, "id"), "partner_id": col(r, "partner_id"),
+        })
     return out
 
 
@@ -82,9 +86,10 @@ def suggest_alias(cal_name, app_names):
 
 
 def match(active, calendar_names, aliases):
-    """active: [{'name','venue'}]；calendar_names: 已抽名的 list[str]；
+    """active: [{'name','venue', 可選'id','partner_id'}]；calendar_names: 已抽名的 list[str]；
     aliases: {行事曆暱稱: App全名}，值為空字串＝已知忽略（排除三人/已結案/非學員）。
     回 {'missing','unmatched','suggestions'}。
+    夥伴共用堂/預收款（partner_id）：只要任一方有排到，兩人都不算漏排。
     已知限制：比對用正規化後的名字，若兩位在線學員全名完全相同會被當成同一位
     （行事曆標題沒有學員 id 可分辨）——暫可接受，發生再處理。"""
     app_names = {_norm(s["name"]) for s in active}
@@ -103,7 +108,16 @@ def match(active, calendar_names, aliases):
         else:
             unmatched.append(cn)
 
-    missing = [s for s in active if _norm(s["name"]) not in matched]
+    # 有排到的學員 id（供夥伴比對）
+    matched_ids = {s.get("id") for s in active if _norm(s["name"]) in matched and s.get("id")}
+
+    def scheduled(s):
+        if _norm(s["name"]) in matched:
+            return True
+        pid = s.get("partner_id")
+        return bool(pid) and pid in matched_ids
+
+    missing = [s for s in active if not scheduled(s)]
     suggestions = {cn: suggest_alias(cn, [s["name"] for s in active]) for cn in unmatched}
     return {"missing": missing, "unmatched": unmatched, "suggestions": suggestions}
 
