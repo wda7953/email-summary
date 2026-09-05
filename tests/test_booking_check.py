@@ -30,7 +30,8 @@ def test_extract_name_wushi():
     assert b.extract_name("陳麗卿 1200", "wushi") == "陳麗卿"
     assert b.extract_name("小叔叔 收1300", "wushi") == "小叔叔"
     assert b.extract_name("打掃", "wushi") == ""
-    assert b.extract_name("x 潘逸霖", "wushi") == ""      # 取消的課不算有排
+    assert b.extract_name("x 潘逸霖", "wushi") == "潘逸霖"      # x＝不計業績但課照上，仍算有排
+    assert b.extract_name("x 媽媽運動17", "wushi") == "媽媽運動"
     assert b.extract_name("", "wushi") == ""
 
 

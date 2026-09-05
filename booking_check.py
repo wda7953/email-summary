@@ -10,8 +10,8 @@ from datetime import timedelta
 # 這三人不用每週排（olan 2026-09-04 指定）
 SKIP_STUDENTS = frozenset({"仁哥", "六哥", "蔡如斐"})
 
-# 非學員標題雜訊：打掃、或 x/X 開頭（取消的課）不算學員預約
-TITLE_NOISE = re.compile(r"^(打掃|[xX])")
+# 非學員標題雜訊：只有打掃不算學員預約（x 開頭課照上、只是不計業績，見 extract_name）
+TITLE_NOISE = re.compile(r"^打掃")
 
 
 def active_students(students_raw, skip=SKIP_STUDENTS):
@@ -46,6 +46,7 @@ def extract_name(summary, kind):
     if kind == "roulie":
         s = re.sub(r"[（(]\s*柔力\s*[)）]", "", s).strip()   # 去括號柔力標記
         s = re.sub(r"\s*柔力\s*", " ", s).strip()           # 去無括號的柔力標記（如「olan 柔力」）
+    s = re.sub(r"^[xX]\s+", "", s).strip()   # x 開頭＝不計業績但課照上，剝掉後照常抓名字（olan 2026-09-05）
     if TITLE_NOISE.match(s):
         return ""
     name = re.sub(r"\s*收?\d.*", "", s).strip()   # 名字＝第一個數字前的文字，含前面的空白/「收」尾巴

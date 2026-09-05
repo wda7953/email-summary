@@ -86,11 +86,6 @@ def main():
     calendar_names = [nm for (summary, kind) in raw_events
                       if (nm := extract_name(summary, kind))]
 
-    # === TEMP DEBUG（查媽媽運動為何沒被讀到，看完即移除）===
-    print("DEBUG_RAW_EVENTS:", [f"{k}|{s}" for (s, k) in raw_events])
-    print("DEBUG_NAMES:", sorted(set(calendar_names)))
-    # === END TEMP DEBUG ===
-
     warnings = self_check(len(active), len(raw_events), len(calendar_names))
     result = match(active, calendar_names, load_aliases(), pairs=load_pairs())
     msg = build_message(start, result, warnings)
