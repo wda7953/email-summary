@@ -77,9 +77,11 @@ def main():
     try:
         active = active_students(fetch_students(), skip=load_skip())
         raw_events = fetch_calendar_events(start, end)
+        aliases = load_aliases()
+        pairs = load_pairs()
     except Exception as ex:
-        # 讀名單／行事曆失敗（憑證失效、行事曆改名…）也要發得出 LINE，
-        # 不然就是「沒收到通知」而不是「收到失敗通知」——後者才有用。
+        # 讀名單／行事曆／設定檔（含 booking_aliases.json、booking_pairs.json 壞掉）
+        # 失敗都要發得出 LINE，不然就是「沒收到通知」而不是「收到失敗通知」——後者才有用。
         send_line(f"⚠️ 排課核對執行失敗，請查 GitHub Actions log：\n{ex}")
         raise
 
@@ -87,7 +89,7 @@ def main():
                       if (nm := extract_name(summary, kind))]
 
     warnings = self_check(len(active), len(raw_events), len(calendar_names))
-    result = match(active, calendar_names, load_aliases(), pairs=load_pairs())
+    result = match(active, calendar_names, aliases, pairs=pairs)
     msg = build_message(start, result, warnings)
     print(msg)
     send_line(msg)

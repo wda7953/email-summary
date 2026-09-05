@@ -50,8 +50,8 @@ def extract_name(summary, kind):
     if TITLE_NOISE.match(s):
         return ""
     name = re.sub(r"\s*收?\d.*", "", s).strip()   # 名字＝第一個數字前的文字，含前面的空白/「收」尾巴
-    if not name or name.lower() == "olan":
-        return ""
+    if not name or "olan" in name.lower():
+        return ""   # olan 個人時段雜訊（如「olan 拉筋」），不只完全等於 olan 才濾
     return name
 
 
@@ -112,9 +112,13 @@ def match(active, calendar_names, aliases, pairs=()):
             matched.add(n)
         elif n in alias_norm:
             tgt = alias_norm[n]
-            if tgt and tgt in app_names:
+            if not tgt:
+                pass   # 空字串＝已知忽略（排除三人/已結案/非學員），不進 unmatched
+            elif tgt in app_names:
                 matched.add(tgt)
-            # tgt 為空、或指向非在線學員 → 已知，忽略（不進 unmatched）
+            else:
+                # 別名有指向但目標不在在線名單裡（壞掉/過期的別名）→ 不能悄悄消失，讓它浮出來
+                unmatched.append(cn)
         else:
             unmatched.append(cn)
 

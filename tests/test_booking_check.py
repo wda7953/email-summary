@@ -39,6 +39,8 @@ def test_extract_name_roulie():
     assert b.extract_name("小丘（柔力）900", "roulie") == "小丘"
     assert b.extract_name("Jess&Abby", "roulie") == "Jess&Abby"
     assert b.extract_name("olan 柔力", "roulie") == ""    # olan 個人時段不是學員
+    assert b.extract_name("olan 拉筋", "roulie") == ""    # olan 個人時段雜訊，不只完全等於 olan 才濾
+    assert b.extract_name("Olan 個人時段", "roulie") == ""  # 不分大小寫
 
 
 def _active(*pairs):
@@ -63,6 +65,21 @@ def test_match_exact_alias_and_ignore():
     assert "陳麗卿" not in missing          # 完全相同命中
     assert "靜" in missing and "小丘" in missing
     assert res["unmatched"] == []           # 阿明被 aliases 標記忽略，不算 unmatched
+
+
+def test_match_alias_clears_student_alone():
+    # 只靠別名比對（行事曆名單裡沒有跟學員全名完全相同的重複項）
+    active = _active(("陳麗卿", "武士"))
+    res = b.match(active, ["麗卿姊"], {"麗卿姊": "陳麗卿"})
+    assert res["missing"] == []
+    assert res["unmatched"] == []
+
+
+def test_match_broken_alias_surfaces_as_unmatched():
+    # 別名指向的目標不在在線名單裡（壞掉/過期的別名）→ 不能悄悄消失，要出現在 unmatched
+    active = _active(("陳麗卿", "武士"))
+    res = b.match(active, ["麗卿姊"], {"麗卿姊": "不存在的人"})
+    assert "麗卿姊" in res["unmatched"]
 
 
 def test_match_partner_scheduled_covers_both():
