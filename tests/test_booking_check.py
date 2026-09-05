@@ -82,6 +82,33 @@ def test_match_no_partner_still_reports_missing():
     assert "陳麗卿" not in missing
 
 
+def test_match_pair_scheduled_covers_both_directions():
+    pairs = [["小叔叔", "媽媽"]]
+    active = _active(("小叔叔", "武士"), ("媽媽", "武士"))
+
+    # 只排到「媽媽」→ 小叔叔靠共用組不算漏排
+    res = b.match(active, ["媽媽"], {}, pairs=pairs)
+    missing = [m["name"] for m in res["missing"]]
+    assert "小叔叔" not in missing
+    assert "媽媽" not in missing
+
+    # 對稱：只排到「小叔叔」→ 媽媽不算漏排
+    res2 = b.match(active, ["小叔叔"], {}, pairs=pairs)
+    missing2 = [m["name"] for m in res2["missing"]]
+    assert "媽媽" not in missing2
+    assert "小叔叔" not in missing2
+
+
+def test_match_unrelated_student_no_pair_no_partner_still_missing():
+    pairs = [["小叔叔", "媽媽"]]
+    active = _active(("小叔叔", "武士"), ("媽媽", "武士"), ("陳麗卿", "武士"))
+    res = b.match(active, ["媽媽"], {}, pairs=pairs)
+    missing = [m["name"] for m in res["missing"]]
+    assert "陳麗卿" in missing          # 無共用組、無 partner_id → 行為不變，仍算漏排
+    assert "小叔叔" not in missing
+    assert "媽媽" not in missing
+
+
 def test_match_unmatched_gets_suggestion():
     active = _active(("陳麗卿", "武士"))
     res = b.match(active, ["麗卿姊"], {})     # 沒別名 → 進 unmatched 且附建議

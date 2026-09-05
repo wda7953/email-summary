@@ -20,3 +20,8 @@ def test_load_skip_reads_json_file():
     skip = wbc.load_skip()
     assert "小丘" in skip
     assert "順哥" in skip
+
+
+def test_load_pairs_reads_json_file():
+    pairs = wbc.load_pairs()
+    assert ["小叔叔", "媽媽"] in pairs

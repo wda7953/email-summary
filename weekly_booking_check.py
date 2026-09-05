@@ -48,6 +48,17 @@ def load_skip():
         return SKIP_STUDENTS
 
 
+def load_pairs():
+    """讀名字共用組清單（booking_pairs.json），給 App 沒登記 partner_id 的組合用
+    （如 小叔叔↔媽媽 擇一有排即可）。檔案不存在時回空 list（不影響其他判斷）。"""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "booking_pairs.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+
+
 def send_line(msg):
     resp = requests.post(
         "https://api.line.me/v2/bot/message/push",
@@ -76,7 +87,7 @@ def main():
                       if (nm := extract_name(summary, kind))]
 
     warnings = self_check(len(active), len(raw_events), len(calendar_names))
-    result = match(active, calendar_names, load_aliases())
+    result = match(active, calendar_names, load_aliases(), pairs=load_pairs())
     msg = build_message(start, result, warnings)
     print(msg)
     send_line(msg)

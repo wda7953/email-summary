@@ -85,15 +85,24 @@ def suggest_alias(cal_name, app_names):
     return best if best_len >= 2 else None
 
 
-def match(active, calendar_names, aliases):
+def match(active, calendar_names, aliases, pairs=()):
     """active: [{'name','venue', 可選'id','partner_id'}]；calendar_names: 已抽名的 list[str]；
-    aliases: {行事曆暱稱: App全名}，值為空字串＝已知忽略（排除三人/已結案/非學員）。
+    aliases: {行事曆暱稱: App全名}，值為空字串＝已知忽略（排除三人/已結案/非學員）；
+    pairs: [[nameA, nameB], ...]（App 全名），共用時段/擇一到即可，跟 partner_id 並行、
+    給 App 沒登記 partner_id 的組合用（如 booking_pairs.json 的 小叔叔↔媽媽）。
     回 {'missing','unmatched','suggestions'}。
     夥伴共用堂/預收款（partner_id）：只要任一方有排到，兩人都不算漏排。
     已知限制：比對用正規化後的名字，若兩位在線學員全名完全相同會被當成同一位
     （行事曆標題沒有學員 id 可分辨）——暫可接受，發生再處理。"""
     app_names = {_norm(s["name"]) for s in active}
     alias_norm = {_norm(k): _norm(v) for k, v in aliases.items()}
+
+    # 名字共用組：正規化後互相對映（雙向），無列在 pairs 裡的名字不受影響
+    pair_group = {}
+    for a, b_ in pairs:
+        na, nb = _norm(a), _norm(b_)
+        pair_group.setdefault(na, set()).add(nb)
+        pair_group.setdefault(nb, set()).add(na)
 
     matched, unmatched = set(), []
     for cn in calendar_names:
@@ -112,10 +121,13 @@ def match(active, calendar_names, aliases):
     matched_ids = {s.get("id") for s in active if _norm(s["name"]) in matched and s.get("id")}
 
     def scheduled(s):
-        if _norm(s["name"]) in matched:
+        n = _norm(s["name"])
+        if n in matched:
             return True
         pid = s.get("partner_id")
-        return bool(pid) and pid in matched_ids
+        if bool(pid) and pid in matched_ids:
+            return True
+        return any(p in matched for p in pair_group.get(n, ()))
 
     missing = [s for s in active if not scheduled(s)]
     suggestions = {cn: suggest_alias(cn, [s["name"] for s in active]) for cn in unmatched}
