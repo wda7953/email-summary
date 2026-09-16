@@ -63,8 +63,10 @@ def summarize_roulie(rows, id2name):
     }
 
 
-def summarize_wushi(rows, id2name, skip_names=frozenset({"黃誼淇"})):
-    """武士收款加總（排除 skip_names）後 ×60% 抽成。"""
+def summarize_wushi(rows, id2name, skip_names=frozenset()):
+    """武士收款加總（排除 skip_names）後 ×60% 抽成。
+    預設不排除任何人；黃誼淇是 60% 抽成、只是請款時間由 olan 決定，2026-09-16 起不再排除。
+    保留 skip_names 參數機制，日後若有真正不抽成的學生可傳入。"""
     gross = 0
     for r in rows:
         if _name(id2name, r["student_id"]) in skip_names:
