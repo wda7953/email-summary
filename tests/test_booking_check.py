@@ -147,7 +147,7 @@ def test_build_message_missing_list():
     res = {"missing": _active(("陳麗卿", "武士"), ("靜", "柔力")),
            "unmatched": [], "suggestions": {}}
     msg = b.build_message(date(2026, 9, 5), res, [])
-    assert "下週排課核對 9/5–9/12" in msg
+    assert "排課核對 9/5–9/12" in msg
     assert "還沒排到（2 位）" in msg
     assert "・陳麗卿（武士）" in msg and "・靜（柔力）" in msg
 

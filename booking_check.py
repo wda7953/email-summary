@@ -162,7 +162,7 @@ def self_check(active_count, raw_event_count, name_count):
 def build_message(start, result, warnings):
     """組 LINE 訊息。warnings 非空時只報異常、不列漏排（避免誤報全員漏排）。"""
     rng = format_range(start)
-    lines = [f"📅 下週排課核對 {rng}", ""]
+    lines = [f"📅 排課核對 {rng}", ""]   # 中性標題：週六/週一兩次都跑，日期已在標題，不寫死「下週」以免週一標錯
     if warnings:
         lines.append("⚠️ 讀取異常，本次結果不可信：")
         lines += [f"・{w}" for w in warnings]
