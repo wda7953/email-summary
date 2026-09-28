@@ -1,0 +1,32 @@
+name: 柔力收入自動匯入記帳
+
+on:
+  # 每月 1 號自動匯「上月」柔力收款進記帳 App。GH 原生排程：01:00 UTC = 台灣 09:00，
+  # 腳本以「台灣昨天所屬的月」＝上月為目標，整個 1 號都成立。冪等(client_id)重跑安全。
+  schedule:
+    - cron: "0 1 1 * *"
+  workflow_dispatch:
+    inputs:
+      month:
+        description: "指定月份補匯，格式 YYYY-MM（留空＝依排程匯上月）"
+        type: string
+        default: ""
+
+jobs:
+  import-income:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安裝套件
+        run: pip install google-api-python-client google-auth pytz requests
+
+      - name: 匯入柔力收入
+        env:
+          GDRIVE_REFRESH_TOKEN:      ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+          GOOGLE_CLIENT_ID:          ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:      ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID:              ${{ secrets.LINE_USER_ID }}
+          MONTH_OVERRIDE:            ${{ inputs.month }}
+        run: python import_roulie_income.py
