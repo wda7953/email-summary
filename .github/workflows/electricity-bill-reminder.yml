@@ -1,0 +1,17 @@
+name: 雙數月電費繳費提醒
+
+on:
+  schedule:
+    - cron: '0 1 6 2,4,6,8,10,12 *'  # 雙數月 6 日 09:00 台灣時間（UTC+8），繳費期限 8 日前
+  workflow_dispatch:
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 傳送 LINE 提醒
+        run: |
+          curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Authorization: Bearer ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"to": "${{ secrets.LINE_USER_ID }}", "messages": [{"type": "text", "text": "⚡ 電費提醒：繳費期限雙數月 8 日前（後天截止），記得繳電費！繳完可到記帳 App 記一筆（分類：電費）"}]}'
