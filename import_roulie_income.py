@@ -28,12 +28,17 @@ EXPENSE_TOKEN = "exp7k2m9qf4wx8vn3"
 
 
 def target_month():
-    """MONTH_OVERRIDE 優先；否則「台灣昨天所屬的月」＝上月（整個 1 號都成立、不怕延遲）。"""
+    """MONTH_OVERRIDE 優先；否則「上一個日曆月」。
+
+    用「本月 1 號減一天」＝上月最後一天，比「昨天所屬月」穩健：
+    GH 原生排程常延遲數小時甚至跨日，若延到 2、3 號才跑，「昨天」會落在本月、
+    誤抓成當月；「本月 1 號減一天」則整個當月內跑都固定指向上月。
+    """
     ov = os.environ.get("MONTH_OVERRIDE", "").strip()
     if ov:
         return int(ov[:4]), int(ov[5:7])
-    yday = datetime.now(TZ) - timedelta(days=1)
-    return yday.year, yday.month
+    last_day_prev = datetime.now(TZ).replace(day=1) - timedelta(days=1)
+    return last_day_prev.year, last_day_prev.month
 
 
 def payment_to_income(p, id2name):
