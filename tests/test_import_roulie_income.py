@@ -1,10 +1,12 @@
 """payment_to_income 純函式測試：單次/套餐分類、去重鍵、防呆。"""
 import os
 import sys
+from datetime import datetime as _real_datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from import_roulie_income import payment_to_income  # noqa: E402
+import import_roulie_income as mod  # noqa: E402
+from import_roulie_income import payment_to_income, _ge_start, target_months  # noqa: E402
 
 ID2NAME = {"s1": "仁哥", "s2": "麗娟姐"}
 
@@ -47,3 +49,33 @@ def test_unknown_student_falls_back_to_id_prefix():
          "package_name": "", "total_amount": 600, "period_sessions": 1}
     rec = payment_to_income(p, ID2NAME)
     assert rec["description"].startswith("?")
+
+
+def test_import_floor_blocks_before_2026_09():
+    assert _ge_start(2026, 9) is True
+    assert _ge_start(2026, 10) is True
+    assert _ge_start(2026, 8) is False   # 8 月及以前的手動舊資料不碰
+    assert _ge_start(2025, 12) is False
+
+
+def test_override_bypasses_floor(monkeypatch):
+    # 手動補匯不套下限
+    monkeypatch.setenv("MONTH_OVERRIDE", "2026-07")
+    assert target_months() == [(2026, 7)]
+
+
+def test_september_run_excludes_august(monkeypatch):
+    # 模擬 9 月跑：候選[8月,9月]，8月被下限擋掉，只留 9 月
+    monkeypatch.delenv("MONTH_OVERRIDE", raising=False)
+
+    fixed = mod.TZ.localize(_real_datetime(2026, 9, 15, 6, 0))
+    monkeypatch.setattr(mod, "datetime", type("D", (), {"now": staticmethod(lambda tz=None: fixed)}))
+    assert target_months() == [(2026, 9)]
+
+
+def test_october_run_includes_september(monkeypatch):
+    monkeypatch.delenv("MONTH_OVERRIDE", raising=False)
+
+    fixed = mod.TZ.localize(_real_datetime(2026, 10, 3, 6, 0))
+    monkeypatch.setattr(mod, "datetime", type("D", (), {"now": staticmethod(lambda tz=None: fixed)}))
+    assert target_months() == [(2026, 9), (2026, 10)]

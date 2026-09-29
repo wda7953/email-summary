@@ -1,15 +1,14 @@
 name: 柔力收入自動匯入記帳
 
 on:
-  # 每月 1 號自動匯「上月」柔力收款進記帳 App。GH 原生排程：01:00 UTC = 台灣 09:00。
-  # 腳本目標＝「上一個日曆月」(本月1號減一天)，GH 排程即使延遲跨日到 2、3 號跑也仍指向上月。
-  # 冪等(client_id=stuapp_<id>)：重跑不重複，補歷史/每月自動皆安全。
+  # 柔力現金收款「當月認列」→ 每天匯「當月＋上月」進記帳 App。GH 原生排程：22:00 UTC = 台灣 06:00。
+  # 寫入前先讀 income 既有 client_id 只補新的；冪等(client_id=stuapp_<id>)，重跑不重複。有新進帳才發 LINE。
   schedule:
-    - cron: "0 1 1 * *"
+    - cron: "0 22 * * *"
   workflow_dispatch:
     inputs:
       month:
-        description: "指定月份補匯，格式 YYYY-MM（留空＝依排程匯上月）"
+        description: "指定月份補匯，格式 YYYY-MM（留空＝匯 當月＋上月）"
         type: string
         default: ""
 
