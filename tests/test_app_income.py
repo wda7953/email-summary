@@ -1,6 +1,6 @@
 from app_income import (
     parse_rows, rows_for_month, summarize_roulie, summarize_wushi,
-    count_sessions, build_message,
+    count_sessions, build_message, roulie_price_split,
 )
 
 HEADER = ["id", "student_id", "venue", "date", "package_name",
@@ -57,6 +57,29 @@ def test_summarize_roulie_splits_single_and_package():
     assert r["total"] == 10000
 
 
+# ── Task 2b：柔力單價分段（1000 以下／以上，含套餐）──
+def test_roulie_price_split_by_unit_price():
+    rows = [
+        {"total_amount": 700, "period_sessions": 1},     # 單價 700 → 以下
+        {"total_amount": 600, "period_sessions": 1},     # 單價 600 → 以下
+        {"total_amount": 1600, "period_sessions": 2},    # 孟潔 800/堂 → 以下
+        {"total_amount": 1000, "period_sessions": 1},    # 單價 1000 → 以上（含門檻）
+        {"total_amount": 8000, "period_sessions": 6},    # 套餐 1333/堂 → 以上
+    ]
+    s = roulie_price_split(rows)
+    assert s["below"] == 700 + 600 + 1600   # 2900
+    assert s["above"] == 1000 + 8000        # 9000
+    assert s["total"] == 11900
+    assert s["below_pct"] == 24.4           # 2900/11900
+    assert s["above_pct"] == 75.6
+
+
+def test_roulie_price_split_guards_zero_sessions():
+    # 堂數為 0 不可除以零，以 1 堂計
+    s = roulie_price_split([{"total_amount": 700, "period_sessions": 0}])
+    assert s["below"] == 700 and s["above"] == 0
+
+
 # ── Task 3：武士聚合 ──
 def test_summarize_wushi_cut_and_skip():
     id2name = {"s1": "甲", "skip": "黃誼淇"}
@@ -100,6 +123,20 @@ def test_build_message_has_sections_and_totals():
     assert "本月收入：$67,362" in msg
     assert "柔力：88 堂" in msg and "武士：100 堂" in msg
     assert warnings == []
+
+
+def test_build_message_shows_price_split_when_present():
+    roulie = {
+        "single": [("仁哥", 1, 700, 700)], "package": [("吳大哥", 8000, 6)],
+        "single_total": 700, "package_total": 8000, "total": 8700,
+        "price_split": {"below": 700, "above": 8000, "total": 8700,
+                        "below_pct": 8.0, "above_pct": 92.0},
+    }
+    wushi = {"gross": 0, "income": 0}
+    msg, _ = build_message(2026, 9, roulie, wushi, 1, 0)
+    assert "單價分佈：" in msg
+    assert "1000以下 $700（8.0%）" in msg
+    assert "1000以上 $8,000（92.0%）" in msg
 
 
 def test_build_message_warns_on_unresolved():

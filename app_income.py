@@ -34,6 +34,29 @@ def _name(id2name, sid):
     return id2name.get(sid, f"?{sid[:8]}")
 
 
+def roulie_price_split(rows, threshold=1000):
+    """柔力收入依『單價＝總額÷堂數』分兩段：未滿門檻 vs 門檻(含)以上。
+    含套餐（套餐單價＝總額÷堂數）；1000 本身歸「1000 以上」。
+    回 below/above 金額、total、及四捨五入到小數一位的佔比。"""
+    below = 0   # 單價 < threshold
+    above = 0   # 單價 >= threshold（含門檻值本身）
+    for r in rows:
+        sess = r["period_sessions"] if r["period_sessions"] > 0 else 1  # 防除以零
+        unit = r["total_amount"] / sess
+        if unit < threshold:
+            below += r["total_amount"]
+        else:
+            above += r["total_amount"]
+    total = below + above
+    return {
+        "below": below,
+        "above": above,
+        "total": total,
+        "below_pct": round(below / total * 100, 1) if total else 0.0,
+        "above_pct": round(above / total * 100, 1) if total else 0.0,
+    }
+
+
 def summarize_roulie(rows, id2name):
     """柔力收入：單次(period_sessions==1)依姓名彙總，套餐(>1)逐筆列出。"""
     single_agg = {}  # (name, fee) -> [count, subtotal]
@@ -60,6 +83,7 @@ def summarize_roulie(rows, id2name):
         "single_total": single_total,
         "package_total": package_total,
         "total": single_total + package_total,
+        "price_split": roulie_price_split(rows),  # 單價 1000 以下／以上 收入分段
     }
 
 
@@ -102,6 +126,16 @@ def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved
     pkg_detail = "、".join(f"{n} {amt:,}" for n, amt, _ in roulie["package"])
     total = roulie["total"] + wushi["income"]
 
+    # 單價分段（1000 以下／以上，含套餐）；舊呼叫沒帶 price_split 就不顯示
+    ps = roulie.get("price_split")
+    split_lines = []
+    if ps and ps["total"]:
+        split_lines = [
+            "單價分佈：",
+            f"　1000以下 ${ps['below']:,}（{ps['below_pct']}%）",
+            f"　1000以上 ${ps['above']:,}（{ps['above_pct']}%）",
+        ]
+
     lines = [
         f"【{year}年{month}月 收入月報】",
         "",
@@ -111,6 +145,7 @@ def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved
         f"套餐：${roulie['package_total']:,}",
         f"　{pkg_detail}" if pkg_detail else "　（無）",
         f"柔力小計：${roulie['total']:,}",
+        *split_lines,
         "",
         "＝武士＝",
         f"收款 ${wushi['gross']:,} → 抽成 ${wushi['income']:,}（×60%）",
