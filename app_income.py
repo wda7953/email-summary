@@ -114,7 +114,51 @@ def count_sessions(rows, venue, year, month, id2name, skip_names=frozenset()):
     return n
 
 
-def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved=0):
+def student_price_tier(payments, venue, threshold=1000):
+    """由 Payments 推每位學員在該場地的『代表單價』級距。
+    取該生該場地『最近一筆』有金額的繳費，單價＝總額÷堂數，判 below(<門檻)/above(>=門檻)。
+    ⚠️ 不可假設套餐＝1000以上：如 21000/30 堂＝700/堂 要算 below。
+    回 {student_id: 'below'|'above'}；無該場地繳費者不列入（級距未知）。"""
+    latest = {}  # sid -> (date, unit_price)
+    for p in payments:
+        if p.get("venue") != venue or p["total_amount"] <= 0:
+            continue
+        sess = p["period_sessions"] if p["period_sessions"] > 0 else 1  # 防除以零
+        unit = p["total_amount"] / sess
+        sid, d = p["student_id"], str(p.get("date", ""))
+        if sid not in latest or d > latest[sid][0]:
+            latest[sid] = (d, unit)
+    return {sid: ("below" if u < threshold else "above") for sid, (d, u) in latest.items()}
+
+
+def count_sessions_by_price(classes, payments, venue, year, month, threshold=1000):
+    """實際執行堂數依學員單價級距分段（1000 以下／以上，含套餐）。
+    級距由 student_price_tier 決定；查不到該場地繳費的堂數計入 unknown 另報。
+    佔比以『已分級堂數（below+above）』為分母，兩段相加＝100%。"""
+    tier = student_price_tier(payments, venue, threshold)
+    ym = f"{year:04d}-{month:02d}"
+    below = above = unknown = 0
+    for c in classes:
+        if c.get("venue") != venue or not str(c.get("date", "")).startswith(ym):
+            continue
+        t = tier.get(c["student_id"])
+        if t == "below":
+            below += 1
+        elif t == "above":
+            above += 1
+        else:
+            unknown += 1
+    counted = below + above
+    return {
+        "below": below, "above": above, "unknown": unknown,
+        "total": below + above + unknown,
+        "below_pct": round(below / counted * 100, 1) if counted else 0.0,
+        "above_pct": round(above / counted * 100, 1) if counted else 0.0,
+    }
+
+
+def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved=0,
+                  r_session_split=None):
     """組月報 LINE 訊息文字；回 (msg, warnings)。unresolved＝對不到學員名的收費筆數。"""
     warnings = []
     if roulie["total"] == 0 and wushi["gross"] == 0:
@@ -126,7 +170,7 @@ def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved
     pkg_detail = "、".join(f"{n} {amt:,}" for n, amt, _ in roulie["package"])
     total = roulie["total"] + wushi["income"]
 
-    # 單價分段（1000 以下／以上，含套餐）；舊呼叫沒帶 price_split 就不顯示
+    # 柔力收入單價分段（1000 以下／以上，含套餐）；舊呼叫沒帶 price_split 就不顯示
     ps = roulie.get("price_split")
     split_lines = []
     if ps and ps["total"]:
@@ -135,6 +179,16 @@ def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved
             f"　1000以下 ${ps['below']:,}（{ps['below_pct']}%）",
             f"　1000以上 ${ps['above']:,}（{ps['above_pct']}%）",
         ]
+
+    # 柔力實際執行堂數分段；舊呼叫沒帶就不顯示
+    ss = r_session_split
+    session_split_lines = []
+    if ss and (ss["below"] + ss["above"]):
+        line = (f"　柔力單價：1000以下 {ss['below']} 堂（{ss['below_pct']}%）"
+                f"／1000以上 {ss['above']} 堂（{ss['above_pct']}%）")
+        if ss.get("unknown"):
+            line += f"；未分級 {ss['unknown']} 堂"
+        session_split_lines = [line]
 
     lines = [
         f"【{year}年{month}月 收入月報】",
@@ -155,6 +209,7 @@ def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved
         "",
         "＝堂數＝",
         f"柔力：{r_sessions} 堂　武士：{w_sessions} 堂",
+        *session_split_lines,
     ]
     msg = "\n".join(lines)
     if warnings:

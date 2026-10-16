@@ -13,7 +13,7 @@ import requests
 from app_sheet import fetch_all, id2name_from
 from app_income import (
     parse_rows, rows_for_month, summarize_roulie, summarize_wushi,
-    count_sessions, build_message,
+    count_sessions, count_sessions_by_price, build_message,
 )
 
 TZ = pytz.timezone("Asia/Taipei")
@@ -44,10 +44,13 @@ def main():
     # 堂數顯示不排除任何人（olan 2026-09-01 決定）
     r_sessions = count_sessions(classes, "柔力", year, month, id2name)
     w_sessions = count_sessions(classes, "武士", year, month, id2name)
+    # 柔力實際執行堂數依單價級距分段（1000 以下／以上）
+    r_session_split = count_sessions_by_price(classes, payments, "柔力", year, month)
     # 自檢：本月收費有幾筆對不到學員名（可能是打錯字/新學員未建檔）
     unresolved = sum(1 for r in r_rows + w_rows if r["student_id"] not in id2name)
 
-    msg, _ = build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved)
+    msg, _ = build_message(year, month, roulie, wushi, r_sessions, w_sessions,
+                           unresolved, r_session_split=r_session_split)
     print(msg)
 
     resp = requests.post(
