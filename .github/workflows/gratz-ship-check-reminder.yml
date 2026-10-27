@@ -1,0 +1,21 @@
+name: Gratz 出貨查詢提醒（一次性 10/30）
+
+on:
+  # 一次性：2026-10-30 提醒查 Liz 有沒有回出貨確認信＋追蹤號
+  # cron 設在台灣 08:00（UTC 00:00），刻意偏早以吸收 GitHub 內建排程常見的延遲；
+  # 保留 workflow_dispatch 供手動補發（GitHub 排程不可靠時）。
+  # ⚠️ 一次性任務：10/30 跑完（或改走 cron-job.org）後，此 workflow 可刪除。
+  schedule:
+    - cron: '0 0 30 10 *'  # 10/30 08:00 台灣時間（UTC+8）
+  workflow_dispatch:
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 傳送 LINE 提醒
+        run: |
+          curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Authorization: Bearer ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"to": "${{ secrets.LINE_USER_ID }}", "messages": [{"type": "text", "text": "🏋️ Gratz 提醒：去 Gmail 查訂單 #35407 這條，看 Liz 有沒有回出貨確認信＋追蹤號。她 10/26 說本週末前（甚至更早）會出貨；若還沒回就再催一次。"}]}'
