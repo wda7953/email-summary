@@ -163,6 +163,7 @@ def main(year=None, month=None):
     # 核對版加一行學員 App 對帳（只給 olan；回報版不帶）
     msg_check = build_month_message(year, month, events, show_names=True)
     recon = reconcile_with_app(year, month, weeks, cal_counts)
+    print(f"對帳結果：{recon}")  # 只含堂數、無機密，方便 Actions log 驗證
     if recon:
         msg_check += "\n\n" + recon
     send_line(msg_check)
