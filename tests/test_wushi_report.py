@@ -153,6 +153,12 @@ def test_reconcile_diffs_empty_when_all_match():
     assert w.reconcile_diffs(weeks, cal, app, 10) == []
 
 
+def test_check_version_shows_data_source():
+    """核對版要標資料來源(iCloud 武士行事曆)，讓 olan 收到就知道這份是讀哪來的。"""
+    src = open(w.__file__, encoding="utf-8").read()
+    assert "資料來源：iCloud 武士行事曆" in src
+
+
 def test_reconcile_with_app_never_raises_on_failure():
     """App 對帳是事後安全網：任何 I/O 失敗都只能回提示字串，絕不可拋例外擋主報告。"""
     weeks = [(date(2026, 10, 5), date(2026, 10, 11))]

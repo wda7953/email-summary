@@ -162,10 +162,11 @@ def main(year=None, month=None):
     cal_counts = {(ws, we): len([e for e in events if ws <= e["date"] <= we]) for ws, we in weeks}
     # 核對版加一行學員 App 對帳（只給 olan；回報版不帶）
     msg_check = build_month_message(year, month, events, show_names=True)
+    msg_check += "\n\n資料來源：iCloud 武士行事曆"  # 只加在核對版，回報版轉武士保持乾淨
     recon = reconcile_with_app(year, month, weeks, cal_counts)
     print(f"對帳結果：{recon}")  # 只含堂數、無機密，方便 Actions log 驗證
     if recon:
-        msg_check += "\n\n" + recon
+        msg_check += "\n" + recon
     send_line(msg_check)
     print("已傳：含名字核對版（含學員App對帳）")
     send_line(build_month_message(year, month, events, show_names=False))

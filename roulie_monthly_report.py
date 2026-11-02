@@ -51,6 +51,7 @@ def main():
 
     msg, _ = build_message(year, month, roulie, wushi, r_sessions, w_sessions,
                            unresolved, r_session_split=r_session_split)
+    msg += "\n\n資料來源：學員 App 試算表（Payments／Classes）"
     print(msg)
 
     resp = requests.post(
