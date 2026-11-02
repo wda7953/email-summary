@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: 安裝 Python 套件
-        run: pip install caldav pytz requests
+        run: pip install caldav pytz requests google-api-python-client google-auth
 
       - name: 執行報告腳本
         env:
@@ -44,5 +44,9 @@ jobs:
           ICLOUD_PASSWORD:           ${{ secrets.ICLOUD_PASSWORD }}
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID:              ${{ secrets.LINE_USER_ID }}
+          # 學員 App 對帳用（讀 Classes 試算表）；缺這幾個時腳本會自動略過對帳不報錯
+          GDRIVE_REFRESH_TOKEN:      ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+          GOOGLE_CLIENT_ID:          ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:      ${{ secrets.GOOGLE_CLIENT_SECRET }}
         # 有帶 year/month 就補發指定月份；留空則不帶參數，腳本自動用本月
         run: python .github/scripts/wushi_monthly_report.py ${{ github.event.inputs.year }} ${{ github.event.inputs.month }}

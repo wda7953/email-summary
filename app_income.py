@@ -114,6 +114,33 @@ def count_sessions(rows, venue, year, month, id2name, skip_names=frozenset()):
     return n
 
 
+def sessions_by_week(rows, venue, year, month, id2name, weeks, skip_names=frozenset()):
+    """逐週計 Classes 出席堂數（指定場地/年月），排除 skip_names。
+
+    供武士業績報告跟行事曆對帳用。weeks 由呼叫端傳入 list[(ws, we)]（date 物件），
+    與行事曆報告用同一套切週，確保逐週口徑一致。回傳 {(ws, we): 堂數}。
+    """
+    from datetime import date as _date
+    out = {}
+    for ws, we in weeks:
+        n = 0
+        for r in rows:
+            if r.get("venue") != venue:
+                continue
+            ds = str(r.get("date", ""))[:10]
+            try:
+                d = _date.fromisoformat(ds)
+            except ValueError:
+                continue
+            if not (ws <= d <= we):
+                continue
+            if _name(id2name, r.get("student_id", "")) in skip_names:
+                continue
+            n += 1
+        out[(ws, we)] = n
+    return out
+
+
 def student_price_tier(payments, venue, threshold=1000):
     """由 Payments 推每位學員在該場地的『代表單價』級距。
     取該生該場地『最近一筆』有金額的繳費，單價＝總額÷堂數，判 below(<門檻)/above(>=門檻)。

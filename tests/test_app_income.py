@@ -1,7 +1,9 @@
+from datetime import date
+
 from app_income import (
     parse_rows, rows_for_month, summarize_roulie, summarize_wushi,
     count_sessions, build_message, roulie_price_split,
-    student_price_tier, count_sessions_by_price,
+    student_price_tier, count_sessions_by_price, sessions_by_week,
 )
 
 HEADER = ["id", "student_id", "venue", "date", "package_name",
@@ -207,3 +209,34 @@ def test_build_message_zero_warns():
     msg, warnings = build_message(2026, 8, roulie, wushi, 0, 0)
     assert warnings and "0" in warnings[0]
     assert msg.startswith("⚠️")
+
+
+# ── sessions_by_week：武士業績報告跟學員 App 對帳用的逐週計數 ──
+def _cls(sid, d, venue="武士"):
+    return [f"id_{sid}_{d}", sid, d, venue, "一般"]
+
+
+def test_sessions_by_week_counts_per_week_and_venue():
+    weeks = [(date(2026, 10, 5), date(2026, 10, 11)),
+             (date(2026, 10, 12), date(2026, 10, 18))]
+    raw = [CLS_HEADER,
+           _cls("s1", "2026-10-08"),            # 第1週武士
+           _cls("s2", "2026-10-09"),            # 第1週武士
+           _cls("s3", "2026-10-09", "柔力"),    # 柔力不算
+           _cls("s1", "2026-10-15"),            # 第2週武士
+           _cls("s9", "2026-09-30")]            # 不在範圍
+    rows = parse_rows(raw)
+    out = sessions_by_week(rows, "武士", 2026, 10, {}, weeks)
+    assert out[(date(2026, 10, 5), date(2026, 10, 11))] == 2
+    assert out[(date(2026, 10, 12), date(2026, 10, 18))] == 1
+
+
+def test_sessions_by_week_applies_skip_names():
+    weeks = [(date(2026, 10, 19), date(2026, 10, 25))]
+    raw = [CLS_HEADER,
+           _cls("s1", "2026-10-19"),
+           _cls("skip1", "2026-10-21")]         # 要被排除的人
+    rows = parse_rows(raw)
+    id2name = {"s1": "黃郁雯", "skip1": "黃誼淇"}
+    out = sessions_by_week(rows, "武士", 2026, 10, id2name, weeks, frozenset({"黃誼淇"}))
+    assert out[(date(2026, 10, 19), date(2026, 10, 25))] == 1  # 黃誼淇被排除

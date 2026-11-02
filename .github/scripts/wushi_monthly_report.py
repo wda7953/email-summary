@@ -8,6 +8,10 @@ TZ = pytz.timezone("Asia/Taipei")
 SKIP_RE = re.compile(r"^(打掃|[xX]|.*另計|黃誼淇|鳳甲國中)")
 TIERS   = [1600, 1300, 1200, 1100, 1000, 990, 900, 500]
 
+# 學員 App 對帳時，要用「與行事曆報告相同的排除」比對武士堂數。
+# 行事曆 SKIP 的人對應到 App 的學員姓名：黃誼淇、另計(為舜的媽 林阿姨)、x媽媽運動(媽媽)。
+APP_RECONCILE_SKIP = frozenset({"黃誼淇", "為舜的媽 林阿姨", "媽媽"})
+
 def send_line(msg):
     requests.post(
         "https://api.line.me/v2/bot/message/push",
@@ -117,14 +121,52 @@ def build_month_message(year, month, events, show_names):
         parts.append(format_report(month, ws, we, s, r, show_names))
     return "\n\n".join(parts)
 
+def reconcile_diffs(weeks, cal_counts, app_counts, month):
+    """純函式：逐週比對行事曆 vs App 武士堂數，回傳不符週的描述清單（相符回空）。"""
+    diffs = []
+    for ws, we in weeks:
+        c = cal_counts.get((ws, we), 0)
+        a = app_counts.get((ws, we), 0)
+        if c != a:
+            diffs.append(f"{month}/{ws.day}-{we.day} 行事曆{c}/App{a}")
+    return diffs
+
+def reconcile_with_app(year, month, weeks, cal_counts):
+    """跟學員 App 對帳（事後安全網）：逐週 App 武士堂數 vs 行事曆，回傳一行提醒字串。
+
+    best-effort：任何錯誤（App 連不上、缺 secret、import 失敗）都吞掉並回提示字串，
+    **絕不可擋住主報告**。只放進 olan 的核對版，不進轉發武士的回報版。
+    """
+    try:
+        import os.path
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+        import app_sheet, app_income
+        students_raw, classes_raw, _ = app_sheet.fetch_all()
+        id2name = app_sheet.id2name_from(students_raw)
+        rows = app_income.parse_rows(classes_raw)
+        app_counts = app_income.sessions_by_week(rows, "武士", year, month, id2name, weeks, APP_RECONCILE_SKIP)
+        diffs = reconcile_diffs(weeks, cal_counts, app_counts, month)
+        if not diffs:
+            return "✅ 學員App對帳：各週武士堂數相符"
+        return "⚠️ 學員App對帳不符(可能漏記，請查)：" + "；".join(diffs)
+    except Exception as ex:
+        return f"（學員App對帳略過：{ex}）"
+
 def main(year=None, month=None):
     today = date.today()
     year  = year or today.year
     month = month or today.month
     events = fetch_events(year, month)
-    # 兩則：先含名字(核對用)、再無名字(可轉發武士)
-    send_line(build_month_message(year, month, events, show_names=True))
-    print("已傳：含名字核對版")
+    # 逐週行事曆堂數，供對帳
+    weeks = week_ranges(year, month)
+    cal_counts = {(ws, we): len([e for e in events if ws <= e["date"] <= we]) for ws, we in weeks}
+    # 核對版加一行學員 App 對帳（只給 olan；回報版不帶）
+    msg_check = build_month_message(year, month, events, show_names=True)
+    recon = reconcile_with_app(year, month, weeks, cal_counts)
+    if recon:
+        msg_check += "\n\n" + recon
+    send_line(msg_check)
+    print("已傳：含名字核對版（含學員App對帳）")
     send_line(build_month_message(year, month, events, show_names=False))
     print("已傳：無名字回報版")
     print("完成！")

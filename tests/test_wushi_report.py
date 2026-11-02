@@ -135,3 +135,27 @@ def test_fetch_is_per_week_not_month_wide():
     src = open(w.__file__, encoding="utf-8").read()
     assert "collect_events" in src, "fetch_events 必須改用逐週 collect_events"
     assert "week_ranges" in src, "逐週查需以 week_ranges 切週"
+
+
+# ---- 學員 App 對帳 tripwire（逐週武士堂數 行事曆 vs App）----
+def test_reconcile_diffs_flags_mismatch_week():
+    weeks = [(date(2026, 10, 5), date(2026, 10, 11)),
+             (date(2026, 10, 19), date(2026, 10, 25))]
+    cal = {weeks[0]: 9, weeks[1]: 14}
+    app = {weeks[0]: 9, weeks[1]: 13}  # 第2週差1
+    diffs = w.reconcile_diffs(weeks, cal, app, 10)
+    assert diffs == ["10/19-25 行事曆14/App13"]
+
+
+def test_reconcile_diffs_empty_when_all_match():
+    weeks = [(date(2026, 10, 5), date(2026, 10, 11))]
+    cal = app = {weeks[0]: 9}
+    assert w.reconcile_diffs(weeks, cal, app, 10) == []
+
+
+def test_reconcile_with_app_never_raises_on_failure():
+    """App 對帳是事後安全網：任何 I/O 失敗都只能回提示字串，絕不可拋例外擋主報告。"""
+    weeks = [(date(2026, 10, 5), date(2026, 10, 11))]
+    # 沒有 Google 憑證/套件的環境下也不能炸，只回「略過」字串
+    out = w.reconcile_with_app(2026, 10, weeks, {weeks[0]: 9})
+    assert isinstance(out, str) and out != ""
