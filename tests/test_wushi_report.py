@@ -83,3 +83,55 @@ def test_fetch_uses_expand_not_date_search():
     src = open(w.__file__, encoding="utf-8").read()
     assert "expand=True" in src, "fetch_events 必須用 search(expand=True) 展開重複性事件"
     assert "date_search" not in src, "禁止用 date_search（不展開重複性事件，會漏算固定學員）"
+
+
+# ---- 2026-10 孫淑英漏算事件：逐週查詢回歸測試 ----
+# 根因：iCloud 對整月一次 expand 遇到被改過的週期課(10/26 改時間、10/29 取消)會連整條
+# 孫淑英系列一起靜默漏掉，逐週查則正常。以下用假日曆鎖死「逐週收齊、不漏、不重複」。
+
+class _FakeDt:
+    def __init__(self, d): self.dt = d
+
+class _FakeComp:
+    def __init__(self, summary, d): self._s, self._d = summary, d
+    def get(self, key, default=None):
+        if key == "DTSTART": return _FakeDt(self._d)
+        if key == "SUMMARY": return self._s
+        return default
+
+class _FakeEvent:
+    def __init__(self, summary, d): self.icalendar_component = _FakeComp(summary, d)
+
+
+def test_collect_events_gathers_recurring_each_week():
+    """逐週查要把每一週的課都收齊；只在某週四出現的週期課(孫淑英)不可被漏。"""
+    universe = [
+        _FakeEvent("孫淑英8 1200", date(2026, 10, 8)),    # 第2週週四
+        _FakeEvent("孫淑英8 1200", date(2026, 10, 15)),   # 第3週週四
+        _FakeEvent("八哥20 1000", date(2026, 10, 9)),
+        _FakeEvent("打掃12", date(2026, 10, 7)),           # 應被 SKIP_RE 跳過
+    ]
+    # 模擬正常的逐週伺服器：各週只回該窗口內(start<=d<end)的事件
+    def search_fn(start, end):
+        return [e for e in universe
+                if start.date() <= e.icalendar_component.get("DTSTART").dt < end.date()]
+    evs = w.collect_events(search_fn, 2026, 10)
+    names = [e["name"] for e in evs]
+    assert names.count("孫淑英") == 2, f"週期課被漏算：{names}"
+    assert "八哥" in names
+    assert "打掃" not in names  # 打掃不是課，仍須跳過
+
+
+def test_collect_events_dedupes_boundary():
+    """邊界去重：就算 search_fn 每週都回傳同一筆，也只能依日期歸入一週、算一次。"""
+    ev = _FakeEvent("玉青18 1000", date(2026, 10, 9))
+    greedy = lambda start, end: [ev]  # 故意每週都回傳同一筆
+    evs = w.collect_events(greedy, 2026, 10)
+    assert sum(1 for e in evs if e["name"] == "玉青") == 1, "邊界事件被重複計算"
+
+
+def test_fetch_is_per_week_not_month_wide():
+    """防呆：fetch 必須走逐週 collect_events，不可退回月寬一次查(會中 iCloud 漏抓)。"""
+    src = open(w.__file__, encoding="utf-8").read()
+    assert "collect_events" in src, "fetch_events 必須改用逐週 collect_events"
+    assert "week_ranges" in src, "逐週查需以 week_ranges 切週"

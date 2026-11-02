@@ -24,33 +24,48 @@ def parse_event(summary, ev_date):
     name    = re.sub(r"\d.*", "", summary).strip()
     return {"date": ev_date, "name": name, "price": price, "receipt_amt": receipt} if name else None
 
+def _parse_raw(ev):
+    """把一筆 caldav 原始事件轉成 (日期, parse_event結果)；解析失敗印 stderr 後回 (None, None)。"""
+    try:
+        comp = ev.icalendar_component
+        dt   = comp.get("DTSTART").dt
+        d    = dt.date() if hasattr(dt, "date") else dt
+        return d, parse_event(str(comp.get("SUMMARY", "")), d)
+    except Exception as ex:
+        # 不再靜默吞掉：印到 stderr(GitHub Actions log 看得到)，避免抓取階段漏算又無跡可循
+        try: summary = str(ev.icalendar_component.get("SUMMARY", ""))
+        except Exception: summary = "?"
+        print(f"略過解析失敗事件：{summary!r} — {ex}", file=sys.stderr)
+        return None, None
+
+def collect_events(search_fn, year, month):
+    """逐週查詢再合併，避開 iCloud「月寬一次 expand」會靜默漏掉被改過的週期課的毛病。
+
+    背景：某堂週期課只要被逐堂改過時間/取消(recurrence override)，iCloud 對整月一次展開
+    就會連整條系列一起漏掉(2026-10 孫淑英事件)；但縮小到單週查就正常。故改逐週各打一次。
+
+    search_fn(start, end)：回傳該區間的原始事件清單(已 expand=True)。
+    每筆事件只歸入 start<=日期<=end 的那一週 → 天然去重、不漏算、不重複。
+    """
+    events = []
+    for ws, we in week_ranges(year, month):
+        start = datetime(ws.year, ws.month, ws.day, 0, 0, tzinfo=TZ)
+        end   = datetime(we.year, we.month, we.day, 0, 0, tzinfo=TZ) + timedelta(days=1)
+        for ev in search_fn(start, end):
+            d, p = _parse_raw(ev)
+            if p and ws <= d <= we:  # 只收屬於本週窗口的，避免邊界事件被兩週各算一次
+                events.append(p)
+    return events
+
 def fetch_events(year, month):
     client  = caldav.DAVClient(url="https://caldav.icloud.com",
                                username=os.environ["ICLOUD_USERNAME"],
                                password=os.environ["ICLOUD_PASSWORD"])
     wushi   = next((c for c in client.principal().calendars() if "武士" in str(c.get_display_name())), None)
     if not wushi: raise ValueError("找不到武士行事曆")
-    next_m  = date(year + (month // 12), month % 12 + 1, 1)
-    raw     = wushi.search(
-        start=datetime(year, month, 1, 0, 0, tzinfo=TZ),
-        end=datetime(next_m.year, next_m.month, next_m.day, 0, 0, tzinfo=TZ),
-        event=True,
-        expand=True,
-    )
-    events = []
-    for ev in raw:
-        try:
-            comp = ev.icalendar_component
-            dt   = comp.get("DTSTART").dt
-            d    = dt.date() if hasattr(dt, "date") else dt
-            p    = parse_event(str(comp.get("SUMMARY", "")), d)
-            if p: events.append(p)
-        except Exception as ex:
-            # 不再靜默吞掉：印到 stderr(GitHub Actions log 看得到)，避免抓取階段漏算又無跡可循
-            try: summary = str(comp.get("SUMMARY", ""))
-            except Exception: summary = "?"
-            print(f"略過解析失敗事件：{summary!r} — {ex}", file=sys.stderr)
-    return events
+    # 逐週查：expand=True 展開週期課，但範圍縮到單週以避開 iCloud 月寬漏抓
+    search_fn = lambda start, end: wushi.search(start=start, end=end, event=True, expand=True)
+    return collect_events(search_fn, year, month)
 
 def week_ranges(year, month):
     last = (date(year + (month // 12), month % 12 + 1, 1) - timedelta(days=1)).day
