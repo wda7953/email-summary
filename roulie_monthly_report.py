@@ -25,6 +25,14 @@ WUSHI_INCOME_SKIP = frozenset({"黃誼淇", "為舜的媽 林阿姨"})
 # 武士免費課學員（如 x媽媽運動）：有付出工時→算武士堂數，但收入 $0，不當漏記價提醒補價。
 WUSHI_FREE_STUDENTS = frozenset({"媽媽"})
 
+# 業績回報學員（堂費由老闆直接按堂數算進 olan 薪資、App 不會有繳費紀錄）：
+# 查無 App 繳費單價時改用此指定單價計入（仍當一般武士 ×60%）。olan 2026-11-06 確認只有這兩位。
+# key＝student_id（穩定、不怕改名）；value＝每堂單價。
+WUSHI_PERF_PRICES = {
+    "c410af57-723a-4381-82f1-0b463128b276": 1000,  # 吳彩足
+    "32671753-17a9-4cbb-a78e-a20883cdaa56": 1000,  # 邱玉青
+}
+
 
 def target_month():
     """MONTH_OVERRIDE 優先；否則報「台灣時間昨天所屬的月」＝上月（整個 1 號都成立、不怕延遲）。"""
@@ -49,7 +57,8 @@ def main():
     roulie = summarize_roulie(r_rows, id2name)
     # 武士改「實際執行」認列：當月實際上課堂數 × 該生單價(App 成交價) ×60%（olan 2026-11-06）
     wushi = summarize_wushi_executed(classes, payments, year, month, id2name,
-                                     WUSHI_INCOME_SKIP, WUSHI_FREE_STUDENTS)
+                                     WUSHI_INCOME_SKIP, WUSHI_FREE_STUDENTS,
+                                     perf_prices=WUSHI_PERF_PRICES)
     # 堂數顯示不排除任何人（olan 2026-09-01 決定）
     r_sessions = count_sessions(classes, "柔力", year, month, id2name)
     w_sessions = count_sessions(classes, "武士", year, month, id2name)

@@ -165,31 +165,38 @@ def student_price_tier(payments, venue, threshold=1000):
 
 
 def summarize_wushi_executed(classes, payments, year, month, id2name,
-                             skip_names=frozenset(), free_names=frozenset()):
+                             skip_names=frozenset(), free_names=frozenset(),
+                             perf_prices=None):
     """武士收入改『實際執行』認列（olan 2026-11-06 拍板，取代舊收款認列）：
     武士收入＝Σ(當月武士實際上課堂數 × 該生單價) ×60%。
     - 單價＝該生武士場地最近一筆繳費的 總額÷堂數（App 成交價，見 student_latest_unit_price）。
     - skip_names：學員收入不計（排除黃誼淇、為舜的媽 林阿姨）→ 記 excluded，不進 gross。
     - free_names：免費課學員（如 x媽媽運動）→ 記 free，有付出工時算堂數但收入 $0，
       且不當「漏記價」提醒補價。優先於單價查找。
+    - perf_prices：{student_id: 單價} 業績回報學員（堂費由老闆直接算進薪資、App 無繳費紀錄），
+      查無 App 繳費單價時改用此對照表的指定單價計入（仍 ×60%）。2026-11-06 加：吳彩足／邱玉青。
     - 其餘查無武士繳費單價的堂數 → 記 unknown 另報、不計入收入（補價後認列）。
     - ⚠️ 堂數顯示不在此排除：全部堂數用 count_sessions（不傳 skip）另算。
     回 {gross, income(×60%), counted, free, unknown, excluded}。"""
     units = student_latest_unit_price(payments, "武士")
+    perf_prices = perf_prices or {}
     ym = f"{year:04d}-{month:02d}"
     gross = 0.0
     counted = free = unknown = excluded = 0
     for c in classes:
         if c.get("venue") != "武士" or not str(c.get("date", "")).startswith(ym):
             continue
-        name = _name(id2name, c.get("student_id", ""))
+        sid = c.get("student_id", "")
+        name = _name(id2name, sid)
         if name in skip_names:
             excluded += 1
             continue
         if name in free_names:
             free += 1
             continue
-        u = units.get(c.get("student_id", ""))
+        u = units.get(sid)
+        if u is None:
+            u = perf_prices.get(sid)  # 業績回報學員改用指定單價
         if u is None:
             unknown += 1
             continue

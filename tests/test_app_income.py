@@ -253,6 +253,33 @@ def test_summarize_wushi_executed_free_beats_unknown_only_for_listed():
     assert r["free"] == 1 and r["unknown"] == 1
 
 
+def test_summarize_wushi_executed_perf_prices_count_at_fixed_unit():
+    # 業績回報學員（App 無繳費）：給 perf_prices 指定單價 → 計入收入(×60%)，不算 unknown；
+    # 不在對照表、又查無價 → 仍 unknown。有 App 繳費者 App 單價優先、perf_prices 不覆蓋。
+    id2name = {"s1": "有繳費", "perf": "吳彩足", "s9": "漏記價"}
+    classes = [
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},    # App 單價 900
+        {"student_id": "perf", "venue": "武士", "date": "2026-10-04"},  # 業績回報 1000
+        {"student_id": "perf", "venue": "武士", "date": "2026-10-11"},  # 業績回報 1000
+        {"student_id": "s9", "venue": "武士", "date": "2026-10-05"},    # 查無價 → unknown
+    ]
+    r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name,
+                                 perf_prices={"perf": 1000})
+    assert r["counted"] == 3                      # s1 + perf×2
+    assert r["gross"] == 2900                      # 900 + 1000 + 1000
+    assert r["income"] == round(2900 * 0.6)        # 1740
+    assert r["unknown"] == 1                        # 只剩 s9
+
+
+def test_summarize_wushi_executed_payment_beats_perf_price():
+    # 有 App 繳費單價者，perf_prices 不生效（App 成交價優先）
+    id2name = {"s1": "有繳費"}
+    classes = [{"student_id": "s1", "venue": "武士", "date": "2026-10-03"}]
+    r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name,
+                                 perf_prices={"s1": 500})
+    assert r["gross"] == 900 and r["counted"] == 1   # 用 App 的 900，非 perf 的 500
+
+
 def test_build_message_wushi_shows_free_line():
     roulie = {"single": [], "package": [], "single_total": 0,
               "package_total": 0, "total": 0}
