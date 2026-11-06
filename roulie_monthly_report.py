@@ -22,6 +22,9 @@ TZ = pytz.timezone("Asia/Taipei")
 # 黃誼淇、為舜的媽 林阿姨兩人。注意：「媽媽」是另一個人，不在此列（olan 2026-11-06 確認）。
 WUSHI_INCOME_SKIP = frozenset({"黃誼淇", "為舜的媽 林阿姨"})
 
+# 武士免費課學員（如 x媽媽運動）：有付出工時→算武士堂數，但收入 $0，不當漏記價提醒補價。
+WUSHI_FREE_STUDENTS = frozenset({"媽媽"})
+
 
 def target_month():
     """MONTH_OVERRIDE 優先；否則報「台灣時間昨天所屬的月」＝上月（整個 1 號都成立、不怕延遲）。"""
@@ -46,7 +49,7 @@ def main():
     roulie = summarize_roulie(r_rows, id2name)
     # 武士改「實際執行」認列：當月實際上課堂數 × 該生單價(App 成交價) ×60%（olan 2026-11-06）
     wushi = summarize_wushi_executed(classes, payments, year, month, id2name,
-                                     WUSHI_INCOME_SKIP)
+                                     WUSHI_INCOME_SKIP, WUSHI_FREE_STUDENTS)
     # 堂數顯示不排除任何人（olan 2026-09-01 決定）
     r_sessions = count_sessions(classes, "柔力", year, month, id2name)
     w_sessions = count_sessions(classes, "武士", year, month, id2name)

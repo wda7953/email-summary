@@ -226,6 +226,43 @@ def test_summarize_wushi_executed_unknown_price_reported_not_in_gross():
     assert r["unknown"] == 1 and r["income"] == 540
 
 
+def test_summarize_wushi_executed_free_students_count_hours_not_income():
+    # 免費課（如 x媽媽運動）：有付出工時要算堂數，但收入 $0，且不當「漏記價」提醒補價
+    id2name = {"s1": "甲", "mom": "媽媽"}
+    classes = [
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},
+        {"student_id": "mom", "venue": "武士", "date": "2026-10-04"},
+        {"student_id": "mom", "venue": "武士", "date": "2026-10-11"},
+    ]
+    r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name,
+                                 free_names={"媽媽"})
+    assert r["counted"] == 1 and r["gross"] == 900 and r["income"] == 540
+    assert r["free"] == 2        # 媽媽兩堂算工時
+    assert r["unknown"] == 0     # 免費不算漏記
+
+
+def test_summarize_wushi_executed_free_beats_unknown_only_for_listed():
+    # 不在免費清單、又查無價 → 仍是 unknown（要補價）
+    id2name = {"mom": "媽媽", "s9": "漏記價"}
+    classes = [
+        {"student_id": "mom", "venue": "武士", "date": "2026-10-04"},
+        {"student_id": "s9", "venue": "武士", "date": "2026-10-05"},
+    ]
+    r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name,
+                                 free_names={"媽媽"})
+    assert r["free"] == 1 and r["unknown"] == 1
+
+
+def test_build_message_wushi_shows_free_line():
+    roulie = {"single": [], "package": [], "single_total": 0,
+              "package_total": 0, "total": 0}
+    wushi = {"gross": 900, "income": 540, "counted": 1,
+             "free": 2, "unknown": 1, "excluded": 0}
+    msg, _ = build_message(2026, 10, roulie, wushi, r_sessions=0, w_sessions=4)
+    assert "免費課 2 堂（算工時、不計收入）" in msg
+    assert "未計入 1 堂" in msg
+
+
 def test_build_message_wushi_execution_format():
     roulie = {"single": [], "package": [], "single_total": 0,
               "package_total": 0, "total": 10000}

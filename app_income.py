@@ -165,26 +165,31 @@ def student_price_tier(payments, venue, threshold=1000):
 
 
 def summarize_wushi_executed(classes, payments, year, month, id2name,
-                             skip_names=frozenset()):
+                             skip_names=frozenset(), free_names=frozenset()):
     """武士收入改『實際執行』認列（olan 2026-11-06 拍板，取代舊收款認列）：
     武士收入＝Σ(當月武士實際上課堂數 × 該生單價) ×60%。
     - 單價＝該生武士場地最近一筆繳費的 總額÷堂數（App 成交價，見 student_latest_unit_price）。
-    - skip_names 的學員收入不計（排除黃誼淇、為舜的媽 林阿姨）→ 記 excluded，不進 gross。
-    - 查無武士繳費單價的堂數 → 記 unknown 另報、不計入收入（補價後認列）。
+    - skip_names：學員收入不計（排除黃誼淇、為舜的媽 林阿姨）→ 記 excluded，不進 gross。
+    - free_names：免費課學員（如 x媽媽運動）→ 記 free，有付出工時算堂數但收入 $0，
+      且不當「漏記價」提醒補價。優先於單價查找。
+    - 其餘查無武士繳費單價的堂數 → 記 unknown 另報、不計入收入（補價後認列）。
     - ⚠️ 堂數顯示不在此排除：全部堂數用 count_sessions（不傳 skip）另算。
-    回 {gross, income(×60%), counted, unknown, excluded}。"""
+    回 {gross, income(×60%), counted, free, unknown, excluded}。"""
     units = student_latest_unit_price(payments, "武士")
     ym = f"{year:04d}-{month:02d}"
     gross = 0.0
-    counted = unknown = excluded = 0
+    counted = free = unknown = excluded = 0
     for c in classes:
         if c.get("venue") != "武士" or not str(c.get("date", "")).startswith(ym):
             continue
-        sid = c.get("student_id", "")
-        if _name(id2name, sid) in skip_names:
+        name = _name(id2name, c.get("student_id", ""))
+        if name in skip_names:
             excluded += 1
             continue
-        u = units.get(sid)
+        if name in free_names:
+            free += 1
+            continue
+        u = units.get(c.get("student_id", ""))
         if u is None:
             unknown += 1
             continue
@@ -192,7 +197,7 @@ def summarize_wushi_executed(classes, payments, year, month, id2name,
         counted += 1
     gross = round(gross)
     return {"gross": gross, "income": round(gross * 0.6),
-            "counted": counted, "unknown": unknown, "excluded": excluded}
+            "counted": counted, "free": free, "unknown": unknown, "excluded": excluded}
 
 
 def count_sessions_by_price(classes, payments, venue, year, month, threshold=1000):
@@ -260,6 +265,8 @@ def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved
             "＝武士＝",
             f"實際執行 {wushi['counted']} 堂　${wushi['gross']:,} → 抽成 ${wushi['income']:,}（×60%）",
         ]
+        if wushi.get("free"):
+            wushi_lines.append(f"　免費課 {wushi['free']} 堂（算工時、不計收入）")
         if wushi.get("unknown"):
             wushi_lines.append(f"　未計入 {wushi['unknown']} 堂（查無繳費單價，補價後認列）")
         if wushi.get("excluded"):
