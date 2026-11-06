@@ -32,7 +32,7 @@ def fetch_all():
     svc = _service()
     return (
         _get(svc, "Students!A:I"),
-        _get(svc, "Classes!A:E"),
+        _get(svc, "Classes!A:I"),  # A:I 才含 payment_id(G)：武士實際執行要用每堂連結的付款包定價
         _get(svc, "Payments!A:I"),
     )
 

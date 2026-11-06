@@ -164,21 +164,36 @@ def student_price_tier(payments, venue, threshold=1000):
             for sid, u in student_latest_unit_price(payments, venue).items()}
 
 
+def payment_unit_prices(payments):
+    """{payment_id: 單價}，單價＝該繳費包 總額÷堂數（0 元或無堂數不列入）。
+    供武士「實際執行」用：每堂課依其 payment_id 連結的那個包定價，不猜最近繳費。"""
+    out = {}
+    for p in payments:
+        pid = p.get("id", "")
+        total = p["total_amount"]
+        if not pid or total <= 0:
+            continue
+        sess = p["period_sessions"] if p["period_sessions"] > 0 else 1  # 防除以零
+        out[pid] = total / sess
+    return out
+
+
 def summarize_wushi_executed(classes, payments, year, month, id2name,
                              skip_names=frozenset(), free_names=frozenset(),
                              perf_prices=None):
     """武士收入改『實際執行』認列（olan 2026-11-06 拍板，取代舊收款認列）：
-    武士收入＝Σ(當月武士實際上課堂數 × 該生單價) ×60%。
-    - 單價＝該生武士場地最近一筆繳費的 總額÷堂數（App 成交價，見 student_latest_unit_price）。
+    武士收入＝Σ(當月武士實際上課堂數 × 該堂單價) ×60%。
+    - 單價＝該堂課 payment_id 連結的那個付款包 總額÷堂數（olan 2026-11-06 拍板：
+      看每堂實際扣哪個包，不用「該生最近一筆繳費」猜——促銷包/一對二包才不會污染常態單價）。
     - skip_names：學員收入不計（排除黃誼淇、為舜的媽 林阿姨）→ 記 excluded，不進 gross。
     - free_names：免費課學員（如 x媽媽運動）→ 記 free，有付出工時算堂數但收入 $0，
       且不當「漏記價」提醒補價。優先於單價查找。
-    - perf_prices：{student_id: 單價} 業績回報學員（堂費由老闆直接算進薪資、App 無繳費紀錄），
-      查無 App 繳費單價時改用此對照表的指定單價計入（仍 ×60%）。2026-11-06 加：吳彩足／邱玉青。
-    - 其餘查無武士繳費單價的堂數 → 記 unknown 另報、不計入收入（補價後認列）。
+    - perf_prices：{student_id: 單價} 業績回報學員（堂費由老闆直接按堂數算進薪資、
+      該堂無連結付款包）→ 用此對照表指定單價計入（仍 ×60%）。2026-11-06 加：吳彩足／邱玉青。
+    - 其餘查無連結付款包的堂數 → 記 unknown 另報、不計入收入（補後認列）。
     - ⚠️ 堂數顯示不在此排除：全部堂數用 count_sessions（不傳 skip）另算。
     回 {gross, income(×60%), counted, free, unknown, excluded}。"""
-    units = student_latest_unit_price(payments, "武士")
+    unit_by_pid = payment_unit_prices(payments)
     perf_prices = perf_prices or {}
     ym = f"{year:04d}-{month:02d}"
     gross = 0.0
@@ -194,9 +209,9 @@ def summarize_wushi_executed(classes, payments, year, month, id2name,
         if name in free_names:
             free += 1
             continue
-        u = units.get(sid)
+        u = unit_by_pid.get(c.get("payment_id", ""))   # 該堂連結的付款包單價
         if u is None:
-            u = perf_prices.get(sid)  # 業績回報學員改用指定單價
+            u = perf_prices.get(sid)                   # 業績回報學員改用指定單價
         if u is None:
             unknown += 1
             continue
@@ -275,7 +290,7 @@ def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved
         if wushi.get("free"):
             wushi_lines.append(f"　免費課 {wushi['free']} 堂（算工時、不計收入）")
         if wushi.get("unknown"):
-            wushi_lines.append(f"　未計入 {wushi['unknown']} 堂（查無繳費單價，補價後認列）")
+            wushi_lines.append(f"　未計入 {wushi['unknown']} 堂（查無連結付款包，補後認列）")
         if wushi.get("excluded"):
             wushi_lines.append(f"　已排除 {wushi['excluded']} 堂（黃誼淇／林阿姨，不計入收入）")
     else:

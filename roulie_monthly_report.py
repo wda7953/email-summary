@@ -72,6 +72,11 @@ def main():
     msg += "\n\n資料來源：學員 App 試算表（Payments／Classes）"
     print(msg)
 
+    # DRY_RUN=1：只印訊息供預覽、不推 LINE（發正式前先在 Actions log 檢查有無 ⚠️）
+    if os.environ.get("DRY_RUN", "").strip():
+        print("\n[DRY_RUN] 已跳過 LINE 推送（預覽模式）")
+        return
+
     resp = requests.post(
         "https://api.line.me/v2/bot/message/push",
         headers={

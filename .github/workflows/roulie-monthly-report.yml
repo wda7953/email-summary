@@ -10,6 +10,10 @@ on:
         description: "指定月份補發，格式 YYYY-MM（留空＝依排程報上月）"
         type: string
         default: ""
+      dry_run:
+        description: "只在 log 預覽、不推 LINE（填 1 啟用）"
+        type: string
+        default: ""
 
 jobs:
   send-report:
@@ -28,4 +32,5 @@ jobs:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID:              ${{ secrets.LINE_USER_ID }}
           MONTH_OVERRIDE:            ${{ inputs.month }}
+          DRY_RUN:                   ${{ inputs.dry_run }}
         run: python roulie_monthly_report.py

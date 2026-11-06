@@ -145,12 +145,15 @@ def test_summarize_wushi_cut_and_skip():
 
 
 # ── 武士改「實際執行」認列（2026-11-06 olan 拍板）──
-# 柔力維持收款，武士改＝當月實際上課堂數 × 該生單價(App 成交價：總額÷堂數) ×60%
+# 柔力維持收款；武士＝當月每堂 × 該堂 payment_id 連結的付款包單價(總額÷堂數) ×60%。
+# 付款包：p900=900/堂、p1200=1200/堂、p1000=1000/堂。
 WUSHI_PAY = [
-    {"student_id": "s1", "venue": "武士", "date": "2026-10-01",
+    {"id": "p900", "student_id": "s1", "venue": "武士", "date": "2026-10-01",
      "total_amount": 9000, "period_sessions": 10},    # 900/堂
-    {"student_id": "s2", "venue": "武士", "date": "2026-10-02",
+    {"id": "p1200", "student_id": "s2", "venue": "武士", "date": "2026-10-02",
      "total_amount": 12000, "period_sessions": 10},   # 1200/堂
+    {"id": "p1000", "student_id": "sx", "venue": "武士", "date": "2026-10-02",
+     "total_amount": 10000, "period_sessions": 10},   # 1000/堂
 ]
 
 
@@ -171,11 +174,11 @@ def test_student_latest_unit_price_latest_wins_and_filters():
 def test_summarize_wushi_executed_sessions_times_unit_cut60():
     id2name = {"s1": "甲", "s2": "乙"}
     classes = [
-        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},
-        {"student_id": "s1", "venue": "武士", "date": "2026-10-10"},
-        {"student_id": "s1", "venue": "武士", "date": "2026-10-17"},
-        {"student_id": "s2", "venue": "武士", "date": "2026-10-05"},
-        {"student_id": "s2", "venue": "武士", "date": "2026-10-12"},
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03", "payment_id": "p900"},
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-10", "payment_id": "p900"},
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-17", "payment_id": "p900"},
+        {"student_id": "s2", "venue": "武士", "date": "2026-10-05", "payment_id": "p1200"},
+        {"student_id": "s2", "venue": "武士", "date": "2026-10-12", "payment_id": "p1200"},
     ]
     r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name)
     assert r["counted"] == 5
@@ -187,9 +190,9 @@ def test_summarize_wushi_executed_sessions_times_unit_cut60():
 def test_summarize_wushi_executed_filters_venue_and_month():
     id2name = {"s1": "甲"}
     classes = [
-        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},   # 計
-        {"student_id": "s1", "venue": "武士", "date": "2026-09-30"},   # 別月不計
-        {"student_id": "s1", "venue": "柔力", "date": "2026-10-04"},   # 別場地不計
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03", "payment_id": "p900"},   # 計
+        {"student_id": "s1", "venue": "武士", "date": "2026-09-30", "payment_id": "p900"},   # 別月不計
+        {"student_id": "s1", "venue": "柔力", "date": "2026-10-04", "payment_id": "p900"},   # 別場地不計
     ]
     r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name)
     assert r["counted"] == 1 and r["gross"] == 900 and r["income"] == 540
@@ -197,18 +200,13 @@ def test_summarize_wushi_executed_filters_venue_and_month():
 
 def test_summarize_wushi_executed_skips_income_names():
     id2name = {"s1": "甲", "skip": "黃誼淇", "lin": "為舜的媽 林阿姨"}
-    pay = WUSHI_PAY + [
-        {"student_id": "skip", "venue": "武士", "date": "2026-10-01",
-         "total_amount": 10000, "period_sessions": 10},
-        {"student_id": "lin", "venue": "武士", "date": "2026-10-01",
-         "total_amount": 10000, "period_sessions": 10},
-    ]
+    # 排除靠姓名，在查單價之前就 excluded；skip/lin 的堂數不論有無連結付款包都不計入
     classes = [
-        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},
-        {"student_id": "skip", "venue": "武士", "date": "2026-10-04"},
-        {"student_id": "lin", "venue": "武士", "date": "2026-10-05"},
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03", "payment_id": "p900"},
+        {"student_id": "skip", "venue": "武士", "date": "2026-10-04", "payment_id": "p1000"},
+        {"student_id": "lin", "venue": "武士", "date": "2026-10-05", "payment_id": "p1000"},
     ]
-    r = summarize_wushi_executed(classes, pay, 2026, 10, id2name,
+    r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name,
                                  skip_names={"黃誼淇", "為舜的媽 林阿姨"})
     assert r["counted"] == 1 and r["gross"] == 900   # 只算 s1
     assert r["excluded"] == 2                         # 黃誼淇＋林阿姨 的堂數不計入收入
@@ -218,8 +216,8 @@ def test_summarize_wushi_executed_skips_income_names():
 def test_summarize_wushi_executed_unknown_price_reported_not_in_gross():
     id2name = {"s1": "甲", "s9": "無繳費"}
     classes = [
-        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},
-        {"student_id": "s9", "venue": "武士", "date": "2026-10-04"},   # 查無武士繳費 → unknown
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03", "payment_id": "p900"},
+        {"student_id": "s9", "venue": "武士", "date": "2026-10-04"},   # 無連結付款包 → unknown
     ]
     r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name)
     assert r["counted"] == 1 and r["gross"] == 900
@@ -230,7 +228,7 @@ def test_summarize_wushi_executed_free_students_count_hours_not_income():
     # 免費課（如 x媽媽運動）：有付出工時要算堂數，但收入 $0，且不當「漏記價」提醒補價
     id2name = {"s1": "甲", "mom": "媽媽"}
     classes = [
-        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03", "payment_id": "p900"},
         {"student_id": "mom", "venue": "武士", "date": "2026-10-04"},
         {"student_id": "mom", "venue": "武士", "date": "2026-10-11"},
     ]
@@ -258,9 +256,9 @@ def test_summarize_wushi_executed_perf_prices_count_at_fixed_unit():
     # 不在對照表、又查無價 → 仍 unknown。有 App 繳費者 App 單價優先、perf_prices 不覆蓋。
     id2name = {"s1": "有繳費", "perf": "吳彩足", "s9": "漏記價"}
     classes = [
-        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},    # App 單價 900
-        {"student_id": "perf", "venue": "武士", "date": "2026-10-04"},  # 業績回報 1000
-        {"student_id": "perf", "venue": "武士", "date": "2026-10-11"},  # 業績回報 1000
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03", "payment_id": "p900"},  # 付款包 900
+        {"student_id": "perf", "venue": "武士", "date": "2026-10-04"},  # 無連結包→業績回報 1000
+        {"student_id": "perf", "venue": "武士", "date": "2026-10-11"},  # 無連結包→業績回報 1000
         {"student_id": "s9", "venue": "武士", "date": "2026-10-05"},    # 查無價 → unknown
     ]
     r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name,
@@ -272,12 +270,12 @@ def test_summarize_wushi_executed_perf_prices_count_at_fixed_unit():
 
 
 def test_summarize_wushi_executed_payment_beats_perf_price():
-    # 有 App 繳費單價者，perf_prices 不生效（App 成交價優先）
+    # 該堂有連結付款包者，perf_prices 不生效（付款包單價優先）
     id2name = {"s1": "有繳費"}
-    classes = [{"student_id": "s1", "venue": "武士", "date": "2026-10-03"}]
+    classes = [{"student_id": "s1", "venue": "武士", "date": "2026-10-03", "payment_id": "p900"}]
     r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name,
                                  perf_prices={"s1": 500})
-    assert r["gross"] == 900 and r["counted"] == 1   # 用 App 的 900，非 perf 的 500
+    assert r["gross"] == 900 and r["counted"] == 1   # 用付款包的 900，非 perf 的 500
 
 
 def test_build_message_wushi_shows_free_line():
