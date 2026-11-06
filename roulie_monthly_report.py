@@ -19,8 +19,8 @@ from app_income import (
 TZ = pytz.timezone("Asia/Taipei")
 
 # 武士收入排除名單（只套在「收入金額」，堂數顯示不排除）。olan 2026-11-06 拍板排除
-# 黃誼淇、為舜的媽（林阿姨）；沿用武士對帳的名字字串，「媽媽」是同一人的別名寫法。
-WUSHI_INCOME_SKIP = frozenset({"黃誼淇", "為舜的媽 林阿姨", "媽媽"})
+# 黃誼淇、為舜的媽 林阿姨兩人。注意：「媽媽」是另一個人，不在此列（olan 2026-11-06 確認）。
+WUSHI_INCOME_SKIP = frozenset({"黃誼淇", "為舜的媽 林阿姨"})
 
 
 def target_month():
