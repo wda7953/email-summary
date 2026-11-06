@@ -12,11 +12,15 @@ import requests
 
 from app_sheet import fetch_all, id2name_from
 from app_income import (
-    parse_rows, rows_for_month, summarize_roulie, summarize_wushi,
+    parse_rows, rows_for_month, summarize_roulie, summarize_wushi_executed,
     count_sessions, count_sessions_by_price, build_message,
 )
 
 TZ = pytz.timezone("Asia/Taipei")
+
+# 武士收入排除名單（只套在「收入金額」，堂數顯示不排除）。olan 2026-11-06 拍板排除
+# 黃誼淇、為舜的媽（林阿姨）；沿用武士對帳的名字字串，「媽媽」是同一人的別名寫法。
+WUSHI_INCOME_SKIP = frozenset({"黃誼淇", "為舜的媽 林阿姨", "媽媽"})
 
 
 def target_month():
@@ -40,7 +44,9 @@ def main():
     r_rows = rows_for_month(payments, "柔力", year, month)
     w_rows = rows_for_month(payments, "武士", year, month)
     roulie = summarize_roulie(r_rows, id2name)
-    wushi = summarize_wushi(w_rows, id2name)
+    # 武士改「實際執行」認列：當月實際上課堂數 × 該生單價(App 成交價) ×60%（olan 2026-11-06）
+    wushi = summarize_wushi_executed(classes, payments, year, month, id2name,
+                                     WUSHI_INCOME_SKIP)
     # 堂數顯示不排除任何人（olan 2026-09-01 決定）
     r_sessions = count_sessions(classes, "柔力", year, month, id2name)
     w_sessions = count_sessions(classes, "武士", year, month, id2name)
