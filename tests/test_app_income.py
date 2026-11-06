@@ -4,6 +4,7 @@ from app_income import (
     parse_rows, rows_for_month, summarize_roulie, summarize_wushi,
     count_sessions, build_message, roulie_price_split,
     student_price_tier, count_sessions_by_price, sessions_by_week,
+    student_latest_unit_price, summarize_wushi_executed,
 )
 
 HEADER = ["id", "student_id", "venue", "date", "package_name",
@@ -141,6 +142,137 @@ def test_summarize_wushi_cut_and_skip():
     r = summarize_wushi(rows, id2name, skip_names={"黃誼淇"})
     assert r["gross"] == 10000
     assert r["income"] == 6000
+
+
+# ── 武士改「實際執行」認列（2026-11-06 olan 拍板）──
+# 柔力維持收款，武士改＝當月實際上課堂數 × 該生單價(App 成交價：總額÷堂數) ×60%
+WUSHI_PAY = [
+    {"student_id": "s1", "venue": "武士", "date": "2026-10-01",
+     "total_amount": 9000, "period_sessions": 10},    # 900/堂
+    {"student_id": "s2", "venue": "武士", "date": "2026-10-02",
+     "total_amount": 12000, "period_sessions": 10},   # 1200/堂
+]
+
+
+def test_student_latest_unit_price_latest_wins_and_filters():
+    payments = [
+        {"student_id": "s1", "venue": "武士", "date": "2026-01-01",
+         "total_amount": 9000, "period_sessions": 10},    # 舊 900
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-01",
+         "total_amount": 11000, "period_sessions": 10},   # 新 1100 → 以最新為準
+        {"student_id": "s1", "venue": "柔力", "date": "2026-10-05",
+         "total_amount": 700, "period_sessions": 1},       # 別場地不算武士單價
+        {"student_id": "s3", "venue": "武士", "date": "2026-10-01",
+         "total_amount": 0, "period_sessions": 1},         # 0 元不列入
+    ]
+    assert student_latest_unit_price(payments, "武士") == {"s1": 1100.0}
+
+
+def test_summarize_wushi_executed_sessions_times_unit_cut60():
+    id2name = {"s1": "甲", "s2": "乙"}
+    classes = [
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-10"},
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-17"},
+        {"student_id": "s2", "venue": "武士", "date": "2026-10-05"},
+        {"student_id": "s2", "venue": "武士", "date": "2026-10-12"},
+    ]
+    r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name)
+    assert r["counted"] == 5
+    assert r["gross"] == 5100           # 3*900 + 2*1200
+    assert r["income"] == 3060          # round(5100*0.6)
+    assert r["unknown"] == 0 and r["excluded"] == 0
+
+
+def test_summarize_wushi_executed_filters_venue_and_month():
+    id2name = {"s1": "甲"}
+    classes = [
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},   # 計
+        {"student_id": "s1", "venue": "武士", "date": "2026-09-30"},   # 別月不計
+        {"student_id": "s1", "venue": "柔力", "date": "2026-10-04"},   # 別場地不計
+    ]
+    r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name)
+    assert r["counted"] == 1 and r["gross"] == 900 and r["income"] == 540
+
+
+def test_summarize_wushi_executed_skips_income_names():
+    id2name = {"s1": "甲", "skip": "黃誼淇", "lin": "為舜的媽 林阿姨"}
+    pay = WUSHI_PAY + [
+        {"student_id": "skip", "venue": "武士", "date": "2026-10-01",
+         "total_amount": 10000, "period_sessions": 10},
+        {"student_id": "lin", "venue": "武士", "date": "2026-10-01",
+         "total_amount": 10000, "period_sessions": 10},
+    ]
+    classes = [
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},
+        {"student_id": "skip", "venue": "武士", "date": "2026-10-04"},
+        {"student_id": "lin", "venue": "武士", "date": "2026-10-05"},
+    ]
+    r = summarize_wushi_executed(classes, pay, 2026, 10, id2name,
+                                 skip_names={"黃誼淇", "為舜的媽 林阿姨"})
+    assert r["counted"] == 1 and r["gross"] == 900   # 只算 s1
+    assert r["excluded"] == 2                         # 黃誼淇＋林阿姨 的堂數不計入收入
+    assert r["income"] == 540
+
+
+def test_summarize_wushi_executed_unknown_price_reported_not_in_gross():
+    id2name = {"s1": "甲", "s9": "無繳費"}
+    classes = [
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},
+        {"student_id": "s9", "venue": "武士", "date": "2026-10-04"},   # 查無武士繳費 → unknown
+    ]
+    r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name)
+    assert r["counted"] == 1 and r["gross"] == 900
+    assert r["unknown"] == 1 and r["income"] == 540
+
+
+def test_summarize_wushi_executed_free_students_count_hours_not_income():
+    # 免費課（如 x媽媽運動）：有付出工時要算堂數，但收入 $0，且不當「漏記價」提醒補價
+    id2name = {"s1": "甲", "mom": "媽媽"}
+    classes = [
+        {"student_id": "s1", "venue": "武士", "date": "2026-10-03"},
+        {"student_id": "mom", "venue": "武士", "date": "2026-10-04"},
+        {"student_id": "mom", "venue": "武士", "date": "2026-10-11"},
+    ]
+    r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name,
+                                 free_names={"媽媽"})
+    assert r["counted"] == 1 and r["gross"] == 900 and r["income"] == 540
+    assert r["free"] == 2        # 媽媽兩堂算工時
+    assert r["unknown"] == 0     # 免費不算漏記
+
+
+def test_summarize_wushi_executed_free_beats_unknown_only_for_listed():
+    # 不在免費清單、又查無價 → 仍是 unknown（要補價）
+    id2name = {"mom": "媽媽", "s9": "漏記價"}
+    classes = [
+        {"student_id": "mom", "venue": "武士", "date": "2026-10-04"},
+        {"student_id": "s9", "venue": "武士", "date": "2026-10-05"},
+    ]
+    r = summarize_wushi_executed(classes, WUSHI_PAY, 2026, 10, id2name,
+                                 free_names={"媽媽"})
+    assert r["free"] == 1 and r["unknown"] == 1
+
+
+def test_build_message_wushi_shows_free_line():
+    roulie = {"single": [], "package": [], "single_total": 0,
+              "package_total": 0, "total": 0}
+    wushi = {"gross": 900, "income": 540, "counted": 1,
+             "free": 2, "unknown": 1, "excluded": 0}
+    msg, _ = build_message(2026, 10, roulie, wushi, r_sessions=0, w_sessions=4)
+    assert "免費課 2 堂（算工時、不計收入）" in msg
+    assert "未計入 1 堂" in msg
+
+
+def test_build_message_wushi_execution_format():
+    roulie = {"single": [], "package": [], "single_total": 0,
+              "package_total": 0, "total": 10000}
+    wushi = {"gross": 5100, "income": 3060, "counted": 5, "unknown": 2, "excluded": 1}
+    msg, _ = build_message(2026, 10, roulie, wushi, r_sessions=50, w_sessions=8)
+    assert "實際執行 5 堂" in msg
+    assert "抽成 $3,060（×60%）" in msg
+    assert "未計入 2 堂" in msg
+    assert "已排除 1 堂" in msg
+    assert "本月收入：$13,060" in msg
 
 
 # ── Task 4：堂數統計 ──

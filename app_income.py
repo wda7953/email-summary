@@ -141,11 +141,10 @@ def sessions_by_week(rows, venue, year, month, id2name, weeks, skip_names=frozen
     return out
 
 
-def student_price_tier(payments, venue, threshold=1000):
-    """由 Payments 推每位學員在該場地的『代表單價』級距。
-    取該生該場地『最近一筆』有金額的繳費，單價＝總額÷堂數，判 below(<門檻)/above(>=門檻)。
-    ⚠️ 不可假設套餐＝1000以上：如 21000/30 堂＝700/堂 要算 below。
-    回 {student_id: 'below'|'above'}；無該場地繳費者不列入（級距未知）。"""
+def student_latest_unit_price(payments, venue):
+    """每位學員在該場地的『代表單價』＝最近一筆有金額繳費的 總額÷堂數（App 成交價）。
+    ⚠️ 不可假設套餐＝高單價：如 21000/30 堂＝700/堂。
+    回 {student_id: unit_price(float)}；無該場地繳費者不列入（單價未知）。"""
     latest = {}  # sid -> (date, unit_price)
     for p in payments:
         if p.get("venue") != venue or p["total_amount"] <= 0:
@@ -155,7 +154,50 @@ def student_price_tier(payments, venue, threshold=1000):
         sid, d = p["student_id"], str(p.get("date", ""))
         if sid not in latest or d > latest[sid][0]:
             latest[sid] = (d, unit)
-    return {sid: ("below" if u < threshold else "above") for sid, (d, u) in latest.items()}
+    return {sid: u for sid, (d, u) in latest.items()}
+
+
+def student_price_tier(payments, venue, threshold=1000):
+    """由 Payments 推每位學員在該場地的『代表單價』級距：below(<門檻)/above(>=門檻)。
+    單價來源同 student_latest_unit_price。回 {student_id: 'below'|'above'}。"""
+    return {sid: ("below" if u < threshold else "above")
+            for sid, u in student_latest_unit_price(payments, venue).items()}
+
+
+def summarize_wushi_executed(classes, payments, year, month, id2name,
+                             skip_names=frozenset(), free_names=frozenset()):
+    """武士收入改『實際執行』認列（olan 2026-11-06 拍板，取代舊收款認列）：
+    武士收入＝Σ(當月武士實際上課堂數 × 該生單價) ×60%。
+    - 單價＝該生武士場地最近一筆繳費的 總額÷堂數（App 成交價，見 student_latest_unit_price）。
+    - skip_names：學員收入不計（排除黃誼淇、為舜的媽 林阿姨）→ 記 excluded，不進 gross。
+    - free_names：免費課學員（如 x媽媽運動）→ 記 free，有付出工時算堂數但收入 $0，
+      且不當「漏記價」提醒補價。優先於單價查找。
+    - 其餘查無武士繳費單價的堂數 → 記 unknown 另報、不計入收入（補價後認列）。
+    - ⚠️ 堂數顯示不在此排除：全部堂數用 count_sessions（不傳 skip）另算。
+    回 {gross, income(×60%), counted, free, unknown, excluded}。"""
+    units = student_latest_unit_price(payments, "武士")
+    ym = f"{year:04d}-{month:02d}"
+    gross = 0.0
+    counted = free = unknown = excluded = 0
+    for c in classes:
+        if c.get("venue") != "武士" or not str(c.get("date", "")).startswith(ym):
+            continue
+        name = _name(id2name, c.get("student_id", ""))
+        if name in skip_names:
+            excluded += 1
+            continue
+        if name in free_names:
+            free += 1
+            continue
+        u = units.get(c.get("student_id", ""))
+        if u is None:
+            unknown += 1
+            continue
+        gross += u
+        counted += 1
+    gross = round(gross)
+    return {"gross": gross, "income": round(gross * 0.6),
+            "counted": counted, "free": free, "unknown": unknown, "excluded": excluded}
 
 
 def count_sessions_by_price(classes, payments, venue, year, month, threshold=1000):
@@ -217,6 +259,24 @@ def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved
             line += f"；未分級 {ss['unknown']} 堂"
         session_split_lines = [line]
 
+    # 武士段：有 counted＝新「實際執行」口徑；沒有＝舊「收款」口徑（相容舊呼叫/測試）
+    if wushi.get("counted") is not None:
+        wushi_lines = [
+            "＝武士＝",
+            f"實際執行 {wushi['counted']} 堂　${wushi['gross']:,} → 抽成 ${wushi['income']:,}（×60%）",
+        ]
+        if wushi.get("free"):
+            wushi_lines.append(f"　免費課 {wushi['free']} 堂（算工時、不計收入）")
+        if wushi.get("unknown"):
+            wushi_lines.append(f"　未計入 {wushi['unknown']} 堂（查無繳費單價，補價後認列）")
+        if wushi.get("excluded"):
+            wushi_lines.append(f"　已排除 {wushi['excluded']} 堂（黃誼淇／林阿姨，不計入收入）")
+    else:
+        wushi_lines = [
+            "＝武士＝",
+            f"收款 ${wushi['gross']:,} → 抽成 ${wushi['income']:,}（×60%）",
+        ]
+
     lines = [
         f"【{year}年{month}月 收入月報】",
         "",
@@ -228,8 +288,7 @@ def build_message(year, month, roulie, wushi, r_sessions, w_sessions, unresolved
         f"柔力小計：${roulie['total']:,}",
         *split_lines,
         "",
-        "＝武士＝",
-        f"收款 ${wushi['gross']:,} → 抽成 ${wushi['income']:,}（×60%）",
+        *wushi_lines,
         "",
         "＝合計＝",
         f"本月收入：${total:,}",
