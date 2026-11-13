@@ -1,0 +1,36 @@
+name: 上週課表對帳
+
+on:
+  workflow_dispatch:   # 準時性交給 cron-job.org（每週一台灣時間）觸發；GitHub 內建排程會延遲 10+ 小時
+    inputs:
+      week_start:
+        description: "補跑指定週，格式 YYYY-MM-DD（該週的週一）；留空＝依排程報上一完整週"
+        type: string
+        default: ""
+      dry_run:
+        description: "只在 log 預覽、不推 LINE（填 1 啟用）"
+        type: string
+        default: ""
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 安裝 Python 套件
+        run: pip install caldav pytz requests google-auth google-api-python-client
+
+      - name: 執行課表對帳
+        env:
+          ICLOUD_USERNAME:           ${{ secrets.ICLOUD_USERNAME }}
+          ICLOUD_PASSWORD:           ${{ secrets.ICLOUD_PASSWORD }}
+          GCAL_REFRESH_TOKEN:        ${{ secrets.GCAL_REFRESH_TOKEN }}
+          GDRIVE_REFRESH_TOKEN:      ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+          GOOGLE_CLIENT_ID:          ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET:      ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_USER_ID:              ${{ secrets.LINE_USER_ID }}
+          WEEK_START:                ${{ inputs.week_start }}
+          DRY_RUN:                   ${{ inputs.dry_run }}
+        run: python weekly_reconcile.py
