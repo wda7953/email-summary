@@ -2,7 +2,7 @@ name: Romana 培訓基金每週存款提醒
 
 on:
   schedule:
-    - cron: '0 1 * * 1'  # 每週一 09:00 台灣時間（UTC+8）
+    - cron: '0 1 * * 5'  # 每週五 09:00 台灣時間（UTC+8）
   workflow_dispatch:
 
 jobs:
