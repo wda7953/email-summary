@@ -1,0 +1,17 @@
+name: Romana 培訓基金每週存款提醒
+
+on:
+  schedule:
+    - cron: '0 1 * * 1'  # 每週一 09:00 台灣時間（UTC+8）
+  workflow_dispatch:
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 傳送 LINE 提醒
+        run: |
+          curl -s -X POST https://api.line.me/v2/bot/message/push \
+            -H "Authorization: Bearer ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{"to": "${{ secrets.LINE_USER_ID }}", "messages": [{"type": "text", "text": "💰 Romana 培訓基金：本週存 US$200–300\n\n目標 6 月前存滿約 $6,300（一次性費＋4月基礎班＋6月中階班＋兩趟機酒），9月進階班 ~$3,200 之後再續存。每週 $250 到 5 月底約 $7,000，接得住。"}]}'
